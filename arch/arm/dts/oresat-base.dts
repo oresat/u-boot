@@ -5,6 +5,8 @@ Only configures pins for the eMMC, SD card, UART0, USB0, I2C0, ADCs, standard
 LED pins, and the power regulator. All other pins are set to GPIO inputs.
 */
 
+/dts-v1/;
+
 #include "am33xx.dtsi"
 #include "am335x-osd335x-common.dtsi"
 
@@ -200,14 +202,6 @@ LED pins, and the power regulator. All other pins are set to GPIO inputs.
   };
 };
 
-/* DaVinci (TI video processor) management data input/output */
-&davinci_mdio {
-  status = "disabled";
-};
-
-&davinci_mdio_sw {
-  status = "disabled";
-};
 
 &dcan0 {
   status = "disabled";
@@ -217,15 +211,6 @@ LED pins, and the power regulator. All other pins are set to GPIO inputs.
   status = "okay";
   pinctrl-names = "default";
   pinctrl-0 = <&dcan1_pins>;
-};
-
-/* common platform ethernet switch */
-&cpsw_emac0 {
-  status = "disabled";
-};
-
-&cpsw_emac1 {
-  status = "disabled";
 };
 
 /* enhanced capture */
@@ -299,10 +284,6 @@ LED pins, and the power regulator. All other pins are set to GPIO inputs.
   status = "disabled";
 };
 
-&mac_sw {
-  status = "disabled";
-};
-
 /* multichannel audio serial port */
 &mcasp0 {
   status = "disabled";
@@ -332,15 +313,6 @@ LED pins, and the power regulator. All other pins are set to GPIO inputs.
 };
 
 &mmc3 {
-  status = "disabled";
-};
-
-/* PRU subsystem */
-&pruss {
-  status = "disabled";
-};
-
-&pruss_tm {
   status = "disabled";
 };
 
