@@ -557,10 +557,10 @@ static void cdns3_wa2_remove_old_request(struct cdns3_endpoint *priv_ep)
 
 		trace_cdns3_wa2(priv_ep, "removes eldest request");
 
+		list_del_init(&priv_req->list);
 		kfree(priv_req->request.buf);
 		cdns3_gadget_ep_free_request(&priv_ep->endpoint,
 					     &priv_req->request);
-		list_del_init(&priv_req->list);
 		--priv_ep->wa2_counter;
 
 		if (!chain)
@@ -1637,6 +1637,14 @@ void cdns3_ep_config(struct cdns3_endpoint *priv_ep)
 	else
 		priv_ep->trb_burst_size = 16;
 
+	/*
+	 * The Endpoint is configured to handle a maximum packet size of
+	 * max_packet_size. Hence, set priv_ep->endpoint.maxpacket to
+	 * max_packet_size. This is necessary to ensure that the TD_SIZE
+	 * is calculated correctly in cdns3_ep_run_transfer().
+	 */
+	priv_ep->endpoint.maxpacket = max_packet_size;
+
 	ret = cdns3_ep_onchip_buffer_reserve(priv_dev, buffering + 1,
 					     !!priv_ep->dir);
 	if (ret) {
@@ -1951,10 +1959,10 @@ static int cdns3_gadget_ep_disable(struct usb_ep *ep)
 	while (!list_empty(&priv_ep->wa2_descmiss_req_list)) {
 		priv_req = cdns3_next_priv_request(&priv_ep->wa2_descmiss_req_list);
 
+		list_del_init(&priv_req->list);
 		kfree(priv_req->request.buf);
 		cdns3_gadget_ep_free_request(&priv_ep->endpoint,
 					     &priv_req->request);
-		list_del_init(&priv_req->list);
 		--priv_ep->wa2_counter;
 	}
 

@@ -21,10 +21,6 @@
 /* MMC Configs */
 #define CFG_SYS_FSL_ESDHC_ADDR	USDHC1_BASE_ADDR
 
-/* USB Configs */
-#define CFG_MXC_USB_PORTSC		(PORT_PTS_UTMI | PORT_PTS_PTW)
-#define CFG_MXC_USB_FLAGS		0
-
 #define DFU_DEFAULT_POLL_TIMEOUT 300
 
 #define CFG_DFU_ENV_SETTINGS \
@@ -49,7 +45,6 @@
 	"image=zImage\0" \
 	"splashpos=m,m\0" \
 	"console=ttymxc5\0" \
-	"fdt_high=0xffffffff\0" \
 	"initrd_high=0xffffffff\0" \
 	"fdtfile=" CONFIG_DEFAULT_FDT_FILE "\0" \
 	"videomode=video=ctfb:x:800,y:480,depth:24,mode:0,pclk:30000,le:46,ri:210,up:22,lo:23,hs:20,vs:10,sync:0,vmode:0\0" \

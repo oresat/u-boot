@@ -9,6 +9,32 @@ config LED
 	  can provide access to board-specific LEDs. Use of the device tree
 	  for configuration is encouraged.
 
+config LED_BOOT
+	bool "Enable LED boot support"
+	depends on LED
+	help
+	  Enable LED boot support.
+
+	  LED boot is a specific LED assigned to signal boot operation status.
+	  Defined in Device Tree /options/u-boot node. Refer here for the supported
+	  options [1].
+
+	  [1] dtschema/schemas/options/u-boot.yaml
+
+config LED_ACTIVITY
+	bool "Enable LED activity support"
+	depends on LED
+	help
+	  Enable LED activity support.
+
+	  LED activity is a specific LED assigned to signal activity operation
+	  like file trasnfer, flash write/erase...
+
+	  Defined in Device Tree /options/u-boot node. Refer here for the supported
+	  options [1].
+
+	  [1] dtschema/schemas/options/u-boot.yaml
+
 config LED_BCM6328
 	bool "LED Support for BCM6328"
 	depends on LED && ARCH_BMIPS
@@ -113,7 +139,8 @@ config SPL_LED_GPIO
 	  See the help of LED_GPIO for details.
 
 config LED_STATUS
-	bool "Enable status LED API"
+	bool "Enable legacy status LED API"
+	depends on !LED
 	help
 	  Allows common u-boot commands to use a board's leds to
 	  provide status for activities like booting and downloading files.
@@ -372,62 +399,6 @@ config LED_STATUS_BOOT
 	  Valid enabled LED device number.
 
 endif # LED_STATUS_BOOT_ENABLE
-
-config LED_STATUS_RED_ENABLE
-	bool "Enable red LED"
-	help
-	  Enable red status LED.
-
-if LED_STATUS_RED_ENABLE
-
-config LED_STATUS_RED
-	int "Red LED identification"
-	help
-	  Valid enabled LED device number.
-
-endif # LED_STATUS_RED_ENABLE
-
-config LED_STATUS_YELLOW_ENABLE
-	bool "Enable yellow LED"
-	help
-	  Enable yellow status LED.
-
-if LED_STATUS_YELLOW_ENABLE
-
-config LED_STATUS_YELLOW
-	int "Yellow LED identification"
-	help
-	  Valid enabled LED device number.
-
-endif # LED_STATUS_YELLOW_ENABLE
-
-config LED_STATUS_BLUE_ENABLE
-	bool "Enable blue LED"
-	help
-	  Enable blue status LED.
-
-if LED_STATUS_BLUE_ENABLE
-
-config LED_STATUS_BLUE
-	int "Blue LED identification"
-	help
-	  Valid enabled LED device number.
-
-endif # LED_STATUS_BLUE_ENABLE
-
-config LED_STATUS_GREEN_ENABLE
-	bool "Enable green LED"
-	help
-	  Enable green status LED.
-
-if LED_STATUS_GREEN_ENABLE
-
-config LED_STATUS_GREEN
-	int "Green LED identification"
-	help
-	  Valid enabled LED device number (0-5).
-
-endif # LED_STATUS_GREEN_ENABLE
 
 config LED_STATUS_CMD
 	bool "Enable status LED commands"

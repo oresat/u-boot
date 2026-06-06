@@ -63,7 +63,7 @@ static const struct zynqmp_device zynqmp_devices[] = {
 	{
 		.id = 0x04688093,
 		.device = 1,
-		.variants = ZYNQMP_VARIANT_EG,
+		.variants = ZYNQMP_VARIANT_EG | ZYNQMP_VARIANT_CG,
 	},
 	{
 		.id = 0x04689093,
@@ -362,7 +362,7 @@ static int soc_xilinx_zynqmp_probe(struct udevice *dev)
 		ret = zynqmp_mmio_read(ZYNQMP_PS_VERSION, &ret_payload[2]);
 	else
 		ret = xilinx_pm_request(PM_GET_CHIPID, 0, 0, 0, 0,
-					ret_payload);
+					0, 0, ret_payload);
 	if (ret < 0)
 		return ret;
 

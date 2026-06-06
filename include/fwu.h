@@ -9,8 +9,7 @@
 #include <blk.h>
 #include <efi.h>
 #include <fwu_mdata.h>
-#include <mtd.h>
-#include <uuid.h>
+#include <u-boot/uuid.h>
 
 #include <linux/types.h>
 
@@ -128,6 +127,17 @@ int fwu_read_mdata(struct udevice *dev, struct fwu_mdata *mdata,
  */
 int fwu_write_mdata(struct udevice *dev, struct fwu_mdata *mdata,
 		    bool primary, uint32_t size);
+
+/**
+ * fwu_platform_hook() - Platform specific processing with FWU metadata
+ * @dev: FWU metadata device
+ * @data: FWU metadata
+ *
+ * Provide a platform specific function for processing with the FWU metadata.
+ *
+ * Return: 0 if OK, -ve on error
+ */
+int fwu_platform_hook(struct udevice *dev, struct fwu_data *data);
 
 /**
  * fwu_get_mdata() - Read, verify and return the FWU metadata
@@ -416,5 +426,16 @@ int fwu_state_machine_updates(bool trial_state, uint32_t update_index);
  * Return: 0 if OK, -ve on error
  */
 int fwu_init(void);
+
+/**
+ * fwu_bank_accepted() - Has the bank been accepted
+ * @data: Version agnostic FWU metadata information
+ * @bank: Update bank to check
+ *
+ * Check in the given bank if all the images have been accepted.
+ *
+ * Return: true if all images accepted, false otherwise
+ */
+bool fwu_bank_accepted(struct fwu_data *data, uint32_t bank);
 
 #endif /* _FWU_H_ */

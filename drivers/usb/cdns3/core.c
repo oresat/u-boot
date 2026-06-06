@@ -149,7 +149,7 @@ static int cdns3_core_init_role(struct cdns3 *cdns)
 
 	dr_mode = best_dr_mode;
 
-#if defined(CONFIG_SPL_USB_HOST) || !defined(CONFIG_SPL_BUILD)
+#if defined(CONFIG_SPL_USB_HOST) || !defined(CONFIG_XPL_BUILD)
 	if (dr_mode == USB_DR_MODE_OTG || dr_mode == USB_DR_MODE_HOST) {
 		ret = cdns3_host_init(cdns);
 		if (ret) {
@@ -392,6 +392,52 @@ static const struct udevice_id cdns3_ids[] = {
 	{ },
 };
 
+/*
+ * The VBUS Valid Bit in the OTG Status register can be used to determine
+ * the role. When VBUS Valid is set, it indicates that a USB Host is supplying
+ * power, so the Controller should assume the PERIPHERAL role. If it isn't set,
+ * it indicates the absence of a USB Host, so the Controller should assume the
+ * HOST role. If the OTG Status register is inaccessible, return an error.
+ */
+static int cdns3_get_otg_mode(struct udevice *parent, enum usb_dr_mode *mode)
+{
+	/* Create a temporary child device for using devfdt_remap_addr_name() */
+	struct udevice child = {
+		.parent = parent,
+	};
+	struct cdns3 cdns, *cdnsp;
+	void __iomem *otg_regs;
+
+	dev_set_ofnode(&child, ofnode_first_subnode(dev_ofnode(parent)));
+	otg_regs = devfdt_remap_addr_name(&child, "otg");
+	if (!otg_regs) {
+		dev_err(parent, "failed to get otg registers for child node\n");
+		return -ENXIO;
+	}
+
+	/*
+	 * As mentioned in drivers/usb/cdns3/drd.c, there are two versions
+	 * of the Controller. The following logic detects the version of the
+	 * Controller and interprets the register layout accordingly.
+	 */
+	cdnsp = &cdns;
+	cdnsp->otg_v0_regs = otg_regs;
+	if (!readl(&cdnsp->otg_v0_regs->cmd)) {
+		cdnsp->otg_regs = otg_regs;
+	} else {
+		cdnsp->otg_v1_regs = otg_regs;
+		cdnsp->otg_regs = (void *)&cdnsp->otg_v1_regs->cmd;
+	}
+
+	/* Use VBUS Valid to determine role */
+	if (readl(&cdnsp->otg_regs->sts) & OTGSTS_VBUS_VALID)
+		*mode = USB_DR_MODE_PERIPHERAL;
+	else
+		*mode = USB_DR_MODE_HOST;
+
+	return 0;
+}
+
 int cdns3_bind(struct udevice *parent)
 {
 	enum usb_dr_mode dr_mode;
@@ -410,9 +456,19 @@ int cdns3_bind(struct udevice *parent)
 	name = ofnode_get_name(node);
 	dr_mode = usb_get_dr_mode(node);
 
+	if (dr_mode == USB_DR_MODE_UNKNOWN)
+		dr_mode = usb_get_dr_mode(dev_ofnode(parent));
+
+	/* Use VBUS Valid to determine role */
+	if (dr_mode == USB_DR_MODE_OTG) {
+		ret = cdns3_get_otg_mode(parent, &dr_mode);
+		if (ret < 0)
+			return ret;
+	}
+
 	switch (dr_mode) {
 #if defined(CONFIG_SPL_USB_HOST) || \
-	(!defined(CONFIG_SPL_BUILD) && defined(CONFIG_USB_HOST))
+	(!defined(CONFIG_XPL_BUILD) && defined(CONFIG_USB_HOST))
 	case USB_DR_MODE_HOST:
 		debug("%s: dr_mode: HOST\n", __func__);
 		driver = "cdns-usb3-host";
@@ -498,7 +554,7 @@ int dm_usb_gadget_handle_interrupts(struct udevice *dev)
 #endif
 
 #if defined(CONFIG_SPL_USB_HOST) || \
-	(!defined(CONFIG_SPL_BUILD) && defined(CONFIG_USB_HOST))
+	(!defined(CONFIG_XPL_BUILD) && defined(CONFIG_USB_HOST))
 static int cdns3_host_probe(struct udevice *dev)
 {
 	struct cdns3_host_priv *priv = dev_get_priv(dev);

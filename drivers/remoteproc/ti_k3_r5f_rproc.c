@@ -233,7 +233,7 @@ static int k3_r5f_prepare(struct udevice *dev)
 
 	dev_dbg(dev, "%s\n", __func__);
 
-	if (cluster->mode == CLUSTER_MODE_LOCKSTEP)
+	if ((cluster->mode == CLUSTER_MODE_LOCKSTEP) || (cluster->mode == CLUSTER_MODE_SINGLECPU))
 		ret = k3_r5f_lockstep_release(cluster);
 	else
 		ret = k3_r5f_split_release(core);
@@ -265,6 +265,13 @@ static int k3_r5f_core_sanity_check(struct k3_r5f_core *core)
 	if (cluster->mode == CLUSTER_MODE_LOCKSTEP && !is_primary_core(core)) {
 		dev_err(core->dev,
 			"Invalid op: Trying to start secondary core %d in lockstep mode\n",
+			core->tsp.proc_id);
+		return -EINVAL;
+	}
+
+	if (cluster->mode == CLUSTER_MODE_SINGLECPU && !is_primary_core(core)) {
+		dev_err(core->dev,
+			"Invalid op: Trying to start secondary core %d in single CPU mode\n",
 			core->tsp.proc_id);
 		return -EINVAL;
 	}
@@ -308,6 +315,7 @@ static int k3_r5f_load(struct udevice *dev, ulong addr, ulong size)
 	bool mem_auto_init;
 	void *image_addr = (void *)addr;
 	int ret;
+	size_t size_img;
 
 	dev_dbg(dev, "%s addr = 0x%lx, size = 0x%lx\n", __func__, addr, size);
 
@@ -334,15 +342,17 @@ static int k3_r5f_load(struct udevice *dev, ulong addr, ulong size)
 
 	k3_r5f_init_tcm_memories(core, mem_auto_init);
 
-	ti_secure_image_post_process(&image_addr, &size);
+	size_img = size;
+	ti_secure_image_post_process(&image_addr, &size_img);
+	size = size_img;
 
-	ret = rproc_elf_load_image(dev, addr, size);
+	ret = rproc_elf_load_image(dev, (ulong)image_addr, size);
 	if (ret < 0) {
 		dev_err(dev, "Loading elf failedi %d\n", ret);
 		goto proc_release;
 	}
 
-	boot_vector = rproc_elf_get_boot_addr(dev, addr);
+	boot_vector = rproc_elf_get_boot_addr(dev, (ulong)image_addr);
 
 	dev_dbg(dev, "%s: Boot vector = 0x%llx\n", __func__, boot_vector);
 
@@ -441,7 +451,7 @@ proc_release:
 
 static int k3_r5f_split_reset(struct k3_r5f_core *core)
 {
-	int ret;
+	int ret = 0;
 
 	dev_dbg(core->dev, "%s\n", __func__);
 
@@ -476,7 +486,7 @@ static int k3_r5f_unprepare(struct udevice *dev)
 {
 	struct k3_r5f_core *core = dev_get_priv(dev);
 	struct k3_r5f_cluster *cluster = core->cluster;
-	int ret;
+	int ret = 0;
 
 	dev_dbg(dev, "%s\n", __func__);
 
@@ -527,7 +537,7 @@ proc_release:
 	return ret;
 }
 
-static void *k3_r5f_da_to_va(struct udevice *dev, ulong da, ulong size)
+static void *k3_r5f_da_to_va(struct udevice *dev, ulong da, ulong size, bool *is_iomem)
 {
 	struct k3_r5f_core *core = dev_get_priv(dev);
 	void __iomem *va = NULL;
@@ -563,6 +573,22 @@ static void *k3_r5f_da_to_va(struct udevice *dev, ulong da, ulong size)
 	return map_physmem(da, size, MAP_NOCACHE);
 }
 
+static int k3_r5f_is_running(struct udevice *dev)
+{
+	struct k3_r5f_core *core = dev_get_priv(dev);
+	u32 cfg, ctrl, sts;
+	u64 boot_vec;
+	int ret;
+
+	dev_dbg(dev, "%s\n", __func__);
+
+	ret = ti_sci_proc_get_status(&core->tsp, &boot_vec, &cfg, &ctrl, &sts);
+	if (ret)
+		return -1;
+
+	return !!(ctrl & PROC_BOOT_CTRL_FLAG_R5_CORE_HALT);
+}
+
 static int k3_r5f_init(struct udevice *dev)
 {
 	return 0;
@@ -580,6 +606,7 @@ static const struct dm_rproc_ops k3_r5f_rproc_ops = {
 	.stop = k3_r5f_stop,
 	.load = k3_r5f_load,
 	.device_to_virt = k3_r5f_da_to_va,
+	.is_running = k3_r5f_is_running,
 };
 
 static int k3_r5f_rproc_configure(struct k3_r5f_core *core)
@@ -768,7 +795,7 @@ static void k3_r5f_core_adjust_tcm_sizes(struct k3_r5f_core *core)
 {
 	struct k3_r5f_cluster *cluster = core->cluster;
 
-	if (cluster->mode == CLUSTER_MODE_LOCKSTEP)
+	if ((cluster->mode == CLUSTER_MODE_LOCKSTEP) || (cluster->mode == CLUSTER_MODE_SINGLECPU))
 		return;
 
 	if (!core->ipdata->tcm_is_double)
@@ -834,8 +861,14 @@ static int k3_r5f_probe(struct udevice *dev)
 			return 0;
 		}
 
+		ret = k3_r5f_proc_request(core);
+		if (ret)
+			return ret;
+
 		/* Make sure Local reset is asserted. Redundant? */
 		reset_assert(&core->reset);
+
+		ti_sci_proc_release(&core->tsp);
 	}
 
 	ret = k3_r5f_rproc_configure(core);
@@ -886,6 +919,7 @@ static const struct udevice_id k3_r5f_rproc_ids[] = {
 	{ .compatible = "ti,j7200-r5f", .data = (ulong)&j7200_j721s2_data, },
 	{ .compatible = "ti,j721s2-r5f", .data = (ulong)&j7200_j721s2_data, },
 	{ .compatible = "ti,am62-r5f", .data = (ulong)&am62_data, },
+	{ .compatible = "ti,am64-r5f", .data = (ulong)&j7200_j721s2_data, },
 	{}
 };
 
@@ -930,6 +964,7 @@ static const struct udevice_id k3_r5fss_ids[] = {
 	{ .compatible = "ti,j7200-r5fss"},
 	{ .compatible = "ti,j721s2-r5fss"},
 	{ .compatible = "ti,am62-r5fss"},
+	{ .compatible = "ti,am64-r5fss"},
 	{}
 };
 

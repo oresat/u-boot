@@ -38,8 +38,13 @@
 static char *get_reset_cause(char *);
 
 #if defined(CONFIG_IMX_HAB)
-struct imx_sec_config_fuse_t const imx_sec_config_fuse = {
+struct imx_fuse const imx_sec_config_fuse = {
 	.bank = 29,
+	.word = 6,
+};
+
+struct imx_fuse const imx_field_return_fuse = {
+	.bank = 9,
 	.word = 6,
 };
 #endif
@@ -171,7 +176,7 @@ static bool ldo_mode_is_enabled(void)
 		return false;
 }
 
-#if !defined(CONFIG_SPL) || (defined(CONFIG_SPL) && defined(CONFIG_SPL_BUILD))
+#if !defined(CONFIG_SPL) || (defined(CONFIG_SPL) && defined(CONFIG_XPL_BUILD))
 #if defined(CONFIG_LDO_ENABLED_MODE)
 static void init_ldo_mode(void)
 {
@@ -357,7 +362,7 @@ static char *get_reset_cause(char *ret)
 #ifdef CONFIG_ENV_IS_IN_MMC
 __weak int board_mmc_get_env_dev(int devno)
 {
-	return CONFIG_SYS_MMC_ENV_DEV;
+	return CONFIG_ENV_MMC_DEVICE_INDEX;
 }
 
 int mmc_get_env_dev(void)
@@ -367,7 +372,7 @@ int mmc_get_env_dev(void)
 
 	/* If not boot from sd/mmc, use default value */
 	if (get_boot_mode() == LOW_POWER_BOOT)
-		return CONFIG_SYS_MMC_ENV_DEV;
+		return CONFIG_ENV_MMC_DEVICE_INDEX;
 
 	bt1_cfg = readl(CMC1_RBASE + 0x40);
 	devno = (bt1_cfg >> 9) & 0x7;

@@ -33,8 +33,6 @@ int pmic_reg_write(struct pmic *p, u32 reg, u32 val)
 		       p->bus);
 		return -ENXIO;
 	}
-#else /* Non DM I2C support - will be removed */
-	I2C_SET_BUS(p->bus);
 #endif
 
 	switch (pmic_i2c_tx_num) {
@@ -77,7 +75,7 @@ int pmic_reg_read(struct pmic *p, u32 reg, u32 *val)
 {
 	unsigned char buf[4] = { 0 };
 	u32 ret_val = 0;
-	int ret;
+	int __maybe_unused ret;
 
 	if (check_reg(p, reg))
 		return -EINVAL;
@@ -93,12 +91,9 @@ int pmic_reg_read(struct pmic *p, u32 reg, u32 *val)
 		return -ENXIO;
 	}
 	ret = dm_i2c_read(dev, reg, buf, pmic_i2c_tx_num);
-#else /* Non DM I2C support - will be removed */
-	I2C_SET_BUS(p->bus);
-	ret = i2c_read(pmic_i2c_addr, reg, 1, buf, pmic_i2c_tx_num);
-#endif
 	if (ret)
 		return ret;
+#endif
 
 	switch (pmic_i2c_tx_num) {
 	case 3:

@@ -35,7 +35,7 @@ void clk_fixed_rate_ofdata_to_plat_(struct udevice *dev,
 				    struct clk_fixed_rate *plat)
 {
 	struct clk *clk = &plat->clk;
-	if (CONFIG_IS_ENABLED(OF_REAL))
+	if (dev_has_ofnode(dev))
 		plat->fixed_rate = dev_read_u32_default(dev, "clock-frequency",
 							0);
 
@@ -44,6 +44,7 @@ void clk_fixed_rate_ofdata_to_plat_(struct udevice *dev,
 	dev_set_uclass_priv(dev, clk);
 
 	clk->dev = dev;
+	clk->id = CLK_ID(dev, 0);
 	clk->enable_count = 0;
 }
 

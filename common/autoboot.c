@@ -5,6 +5,7 @@
  */
 
 #include <config.h>
+#include <ansi.h>
 #include <autoboot.h>
 #include <bootretry.h>
 #include <cli.h>
@@ -186,10 +187,15 @@ static int passwd_abort_sha256(uint64_t etime)
 	ret = hash_parse_string(algo_name, sha_env_str, sha_env);
 	if (ret) {
 		printf("Hash %s not supported!\n", algo_name);
+		free(presskey);
 		return 0;
 	}
 
 	sha = malloc_cache_aligned(SHA256_SUM_LEN);
+	if (!sha) {
+		free(presskey);
+		return -ENOMEM;
+	}
 	size = SHA256_SUM_LEN;
 	/*
 	 * We don't know how long the stop-string is, so we need to
@@ -371,19 +377,24 @@ static int abortboot_key_sequence(int bootdelay)
 	return abort;
 }
 
+static void print_boot_delay(int bootdelay)
+{
+	printf(ANSI_CLEAR_LINE "\rHit any key to stop autoboot: %d", bootdelay);
+}
+
 static int abortboot_single_key(int bootdelay)
 {
 	int abort = 0;
 	unsigned long ts;
 
-	printf("Hit any key to stop autoboot: %2d ", bootdelay);
+	print_boot_delay(bootdelay);
 
 	/*
 	 * Check if key already pressed
 	 */
 	if (tstc()) {	/* we got a key press	*/
 		getchar();	/* consume input	*/
-		puts("\b\b\b 0");
+		print_boot_delay(0);
 		abort = 1;	/* don't auto boot	*/
 	}
 
@@ -405,7 +416,7 @@ static int abortboot_single_key(int bootdelay)
 			udelay(10000);
 		} while (!abort && get_timer(ts) < 1000);
 
-		printf("\b\b\b%2d ", bootdelay);
+		print_boot_delay(bootdelay);
 	}
 
 	putc('\n');

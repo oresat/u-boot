@@ -6,6 +6,7 @@
 
 #define pr_fmt(fmt) "cmd-db: " fmt
 
+#include <asm/system.h>
 #include <dm.h>
 #include <dm/ofnode.h>
 #include <dm/device_compat.h>
@@ -141,7 +142,7 @@ static int cmd_db_get_header(const char *id, const struct entry_header **eh,
 
 		ent = rsc_to_entry_header(rsc_hdr);
 		for (j = 0; j < le16_to_cpu(rsc_hdr->cnt); j++, ent++) {
-			if (memcmp(ent->id, query, sizeof(ent->id)) == 0) {
+			if (strncmp(ent->id, query, sizeof(ent->id)) == 0) {
 				if (eh)
 					*eh = ent;
 				if (rh)
@@ -182,9 +183,55 @@ u32 cmd_db_read_addr(const char *id)
 }
 EXPORT_SYMBOL_GPL(cmd_db_read_addr);
 
-int cmd_db_bind(struct udevice *dev)
+/**
+ * cmd_db_read_slave_id - Get the slave ID for a given resource address
+ *
+ * @id: Resource id to query the DB for version
+ *
+ * Return: cmd_db_hw_type enum on success, CMD_DB_HW_INVALID on error
+ */
+enum cmd_db_hw_type cmd_db_read_slave_id(const char *id)
+{
+	int ret;
+	const struct entry_header *ent;
+	u32 addr;
+
+	ret = cmd_db_get_header(id, &ent, NULL);
+	if (ret < 0)
+		return CMD_DB_HW_INVALID;
+
+	addr = le32_to_cpu(ent->addr);
+	return (addr >> SLAVE_ID_SHIFT) & SLAVE_ID_MASK;
+}
+
+/**
+ * cmd_db_read_aux_data() - Query command db for aux data.
+ *
+ *  @id: Resource to retrieve AUX Data on
+ *  @len: size of data buffer returned
+ *
+ *  Return: pointer to data on success, error pointer otherwise
+ */
+const void *cmd_db_read_aux_data(const char *id, size_t *len)
+{
+	int ret;
+	const struct entry_header *ent;
+	const struct rsc_hdr *rsc_hdr;
+
+	ret = cmd_db_get_header(id, &ent, &rsc_hdr);
+	if (ret)
+		return ERR_PTR(ret);
+
+	if (len)
+		*len = le16_to_cpu(ent->len);
+
+	return rsc_offset(rsc_hdr, ent);
+}
+
+static int cmd_db_bind(struct udevice *dev)
 {
 	void __iomem *base;
+	fdt_size_t size;
 	ofnode node;
 
 	if (cmd_db_header)
@@ -194,11 +241,14 @@ int cmd_db_bind(struct udevice *dev)
 
 	debug("%s(%s)\n", __func__, ofnode_get_name(node));
 
-	base = (void __iomem *)ofnode_get_addr(node);
+	base = (void __iomem *)ofnode_get_addr_size(node, "reg", &size);
 	if ((fdt_addr_t)base == FDT_ADDR_T_NONE) {
 		log_err("%s: Failed to read base address\n", __func__);
 		return -ENOENT;
 	}
+
+	/* On SM8550/SM8650 and newer SoCs cmd-db might not be mapped */
+	mmu_map_region((phys_addr_t)base, (phys_size_t)size, false);
 
 	cmd_db_header = base;
 	if (!cmd_db_magic_matches(cmd_db_header)) {

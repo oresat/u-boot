@@ -6,6 +6,7 @@
 #include <config.h>
 #include <command.h>
 #include <irq_func.h>
+#include <linux/string.h>
 
 static int do_interrupts(struct cmd_tbl *cmdtp, int flag, int argc,
 			 char *const argv[])
@@ -28,9 +29,6 @@ U_BOOT_CMD(
 	"enable or disable interrupts",
 	"[on, off]"
 );
-
-/* Implemented in $(CPU)/interrupts.c */
-int do_irqinfo(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv[]);
 
 U_BOOT_CMD(
 	irqinfo,    1,    1,     do_irqinfo,

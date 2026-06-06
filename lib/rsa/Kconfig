@@ -44,7 +44,7 @@ config RSA_VERIFY_WITH_PKEY
 	  This does not suit the use case where there is no way defined to
 	  provide such additional key properties in standardized form,
 	  particularly UEFI secure boot.
-	  This options enables RSA signature verification with a public key
+	  This option enables RSA signature verification with a public key
 	  directly specified in image_sign_info, where all the necessary
 	  key properties will be calculated on the fly in verification code.
 
@@ -62,10 +62,24 @@ config SPL_RSA_VERIFY_WITH_PKEY
 	  This does not suit the use case where there is no way defined to
 	  provide such additional key properties in standardized form,
 	  particularly UEFI secure boot.
-	  This options enables RSA signature verification with a public key
+	  This option enables RSA signature verification with a public key
 	  directly specified in image_sign_info, where all the necessary
 	  key properties will be calculated on the fly in verification code
 	  in the SPL.
+
+config RSASSA_PSS
+	bool "Support rsassa-pss signature scheme"
+	depends on RSA_VERIFY
+	help
+	  Enable this to support the pss padding algorithm as described
+	  in the rfc8017 (https://tools.ietf.org/html/rfc8017).
+
+config SPL_RSASSA_PSS
+	bool "Support rsassa-pss signature scheme within SPL"
+	depends on SPL_RSA_VERIFY
+	help
+	  Enable this to support the pss padding algorithm as described
+	  in the rfc8017 (https://tools.ietf.org/html/rfc8017) within SPL.
 
 config RSA_SOFTWARE_EXP
 	bool "Enable driver for RSA Modular Exponentiation in software"

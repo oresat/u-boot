@@ -88,6 +88,7 @@ class Entry(object):
             updated with a hash of the entry contents
         comp_bintool: Bintools used for compress and decompress data
         fake_fname: Fake filename, if one was created, else None
+        faked (bool): True if the entry is absent and faked
         required_props (dict of str): Properties which must be present. This can
             be added to by subclasses
         elf_fname (str): Filename of the ELF file, if this entry holds an ELF
@@ -108,6 +109,9 @@ class Entry(object):
             not need to be done again. This is only used with 'binman replace',
             to stop sections from being rebuilt if their entries have not been
             replaced
+        symbols_base (int): Use this value as the assumed load address of the
+            target entry, when calculating the symbol value. If None, this is
+            0 for blobs and the image-start address for ELF files
     """
     fake_dir = None
 
@@ -159,6 +163,7 @@ class Entry(object):
         self.preserve = False
         self.build_done = False
         self.no_write_symbols = False
+        self.symbols_base = None
 
     @staticmethod
     def FindEntryClass(etype, expanded):
@@ -324,6 +329,7 @@ class Entry(object):
 
         self.preserve = fdt_util.GetBool(self._node, 'preserve')
         self.no_write_symbols = fdt_util.GetBool(self._node, 'no-write-symbols')
+        self.symbols_base = fdt_util.GetInt(self._node, 'symbols-base')
 
     def GetDefaultFilename(self):
         return None
@@ -387,9 +393,8 @@ class Entry(object):
         """Set the value of device-tree properties calculated by binman"""
         state.SetInt(self._node, 'offset', self.offset)
         state.SetInt(self._node, 'size', self.size)
-        base = self.section.GetRootSkipAtStart() if self.section else 0
         if self.image_pos is not None:
-            state.SetInt(self._node, 'image-pos', self.image_pos - base)
+            state.SetInt(self._node, 'image-pos', self.image_pos)
         if self.GetImage().allow_repack:
             if self.orig_offset is not None:
                 state.SetInt(self._node, 'orig-offset', self.orig_offset, True)
@@ -576,8 +581,16 @@ class Entry(object):
     def GetEntryArgsOrProps(self, props, required=False):
         """Return the values of a set of properties
 
+        Looks up the named entryargs and returns the value for each. If any
+        required ones are missing, the error is reported to the user.
+
         Args:
-            props: List of EntryArg objects
+            props (list of EntryArg): List of entry arguments to look up
+            required (bool): True if these entry arguments are required
+
+        Returns:
+            list of values: one for each item in props, the type is determined
+                by the EntryArg's 'datatype' property (str or int)
 
         Raises:
             ValueError if a property is not found
@@ -698,14 +711,22 @@ class Entry(object):
     def WriteSymbols(self, section):
         """Write symbol values into binary files for access at run time
 
+        As a special case, if symbols_base is not specified and this is an
+        end-at-4gb image, a symbols_base of 0 is used
+
         Args:
           section: Section containing the entry
         """
         if self.auto_write_symbols and not self.no_write_symbols:
             # Check if we are writing symbols into an ELF file
             is_elf = self.GetDefaultFilename() == self.elf_fname
+
+            symbols_base = self.symbols_base
+            if symbols_base is None and self.GetImage()._end_at_4gb:
+                symbols_base = 0
+
             elf.LookupAndWriteSymbols(self.elf_fname, self, section.GetImage(),
-                                      is_elf, self.elf_base_sym)
+                                      is_elf, self.elf_base_sym, symbols_base)
 
     def CheckEntries(self):
         """Check that the entry offsets are correct
@@ -739,7 +760,7 @@ class Entry(object):
                           self.image_pos)
 
     # pylint: disable=assignment-from-none
-    def GetEntries(self):
+    def GetEntries(self) -> None:
         """Return a list of entries contained by this entry
 
         Returns:
@@ -1100,7 +1121,7 @@ features to produce new behaviours.
         if self.missing and not self.optional:
             missing_list.append(self)
 
-    def check_fake_fname(self, fname, size=0):
+    def check_fake_fname(self, fname: str, size: int = 0) -> str:
         """If the file is missing and the entry allows fake blobs, fake it
 
         Sets self.faked to True if faked
@@ -1110,9 +1131,7 @@ features to produce new behaviours.
             size (int): Size of fake file to create
 
         Returns:
-            tuple:
-                fname (str): Filename of faked file
-                bool: True if the blob was faked, False if not
+            fname (str): Filename of faked file
         """
         if self.allow_fake and not pathlib.Path(fname).is_file():
             if not self.fake_fname:
@@ -1122,8 +1141,8 @@ features to produce new behaviours.
                 tout.info(f"Entry '{self._node.path}': Faked blob '{outfname}'")
                 self.fake_fname = outfname
             self.faked = True
-            return self.fake_fname, True
-        return fname, False
+            return self.fake_fname
+        return fname
 
     def CheckFakedBlobs(self, faked_blobs_list):
         """Check if any entries in this section have faked external blobs
@@ -1331,6 +1350,10 @@ features to produce new behaviours.
         if not os.path.exists(cls.fake_dir):
             os.mkdir(cls.fake_dir)
         tout.notice(f"Fake-blob dir is '{cls.fake_dir}'")
+
+    def drop_absent_optional(self) -> None:
+        """Entries don't have any entries, do nothing"""
+        pass
 
     def ensure_props(self):
         """Raise an exception if properties are missing

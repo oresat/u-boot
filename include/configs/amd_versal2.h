@@ -16,8 +16,8 @@
 /* #define CONFIG_ARMV8_SWITCH_TO_EL1 */
 
 /* Generic Interrupt Controller Definitions */
-#define GICD_BASE	0xF9000000
-#define GICR_BASE	0xF9060000
+#define GICD_BASE	0xe2000000
+#define GICR_BASE	0xe2060000
 
 /* Serial setup */
 #define CFG_SYS_BAUDRATE_TABLE \
@@ -49,12 +49,12 @@
 #define ENV_MEM_LAYOUT_SETTINGS \
 	"fdt_addr_r=0x40000000\0" \
 	"fdt_size_r=0x400000\0" \
-	"pxefile_addr_r=0x10000000\0" \
-	"kernel_addr_r=0x18000000\0" \
+	"pxefile_addr_r=0x70000000\0" \
+	"kernel_addr_r=0x48000000\0" \
 	"kernel_size_r=0x10000000\0" \
-	"kernel_comp_addr_r=0x30000000\0" \
+	"kernel_comp_addr_r=0x50000000\0" \
 	"kernel_comp_size=0x3C00000\0" \
-	"ramdisk_addr_r=0x02100000\0" \
+	"ramdisk_addr_r=0x60000000\0" \
 	"script_size_f=0x80000\0"
 
 #if defined(CONFIG_DISTRO_DEFAULTS)
@@ -105,6 +105,14 @@
 #define BOOTENV_DEV_NAME_JTAG(devtypeu, devtypel, instance) \
 	"jtag "
 
+#define BOOT_TARGET_DEVICES_UFS(func)	func(UFS, ufs, 0)
+
+#define BOOTENV_DEV_UFS(devtypeu, devtypel, instance) \
+	"bootcmd_" #devtypel "=" #devtypel " init " #instance "; scsi scan;\0"
+
+#define BOOTENV_DEV_NAME_UFS(devtypeu, devtypel, instance) \
+	"ufs "
+
 #define BOOT_TARGET_DEVICES_DFU_USB(func)  func(DFU_USB, dfu_usb, 0)
 
 #define BOOTENV_DEV_DFU_USB(devtypeu, devtypel, instance) \
@@ -117,11 +125,19 @@
 #define BOOTENV_DEV_NAME_DFU_USB(devtypeu, devtypel, instance) \
 	""
 
+#if defined(CONFIG_USB_STORAGE)
+#define BOOT_TARGET_DEVICES_USB(func)  func(USB, usb, 0) func(USB, usb, 1)
+#else
+#define BOOT_TARGET_DEVICES_USB(func)
+#endif
+
 #define BOOT_TARGET_DEVICES(func) \
 	BOOT_TARGET_DEVICES_JTAG(func) \
 	BOOT_TARGET_DEVICES_MMC(func) \
+	BOOT_TARGET_DEVICES_UFS(func) \
 	BOOT_TARGET_DEVICES_XSPI(func) \
 	BOOT_TARGET_DEVICES_DFU_USB(func) \
+	BOOT_TARGET_DEVICES_USB(func) \
 	BOOT_TARGET_DEVICES_PXE(func) \
 	BOOT_TARGET_DEVICES_DHCP(func)
 
@@ -129,12 +145,14 @@
 
 #else /* CONFIG_DISTRO_DEFAULTS */
 # define BOOTENV
+# define BOOTENV_DEV_SHARED_XSPI
 #endif /* CONFIG_DISTRO_DEFAULTS */
 
 /* Initial environment variables */
 #ifndef CFG_EXTRA_ENV_SETTINGS
 #define CFG_EXTRA_ENV_SETTINGS \
 	ENV_MEM_LAYOUT_SETTINGS \
+	"usb_pgood_delay=2000\0" \
 	BOOTENV \
 	BOOTENV_DEV_SHARED_XSPI \
 	DFU_ALT_INFO

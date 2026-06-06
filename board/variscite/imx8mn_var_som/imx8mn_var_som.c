@@ -44,17 +44,10 @@ struct var_imx8_eeprom_info {
 	u8 partnumber2[5];        /* Part number 2 */
 } __packed;
 
-int board_init(void)
-{
-	return 0;
-}
-
 int board_mmc_get_env_dev(int devno)
 {
 	return devno;
 }
-
-#if !defined(CONFIG_SPL_BUILD)
 
 #if defined(CONFIG_DISPLAY_BOARDINFO)
 
@@ -226,5 +219,3 @@ int ft_board_setup(void *blob, struct bd_info *bd)
 	return configure_phy_reset_gpios(blob);
 }
 #endif /* CONFIG_OF_BOARD_SETUP */
-
-#endif /* CONFIG_SPL_BUILD */

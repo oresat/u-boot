@@ -28,6 +28,31 @@ enum {
 	IMAGE_ACCEPT_CLEAR,
 };
 
+/**
+ * fwu_bank_accepted() - Has the bank been accepted
+ * @data: Version agnostic FWU metadata information
+ * @bank: Update bank to check
+ *
+ * Check in the given bank if all the images have been accepted.
+ *
+ * Return: true if all images accepted, false otherwise
+ */
+bool fwu_bank_accepted(struct fwu_data *data, uint32_t bank)
+{
+	u32 i;
+	struct fwu_image_entry *img_entry;
+	struct fwu_image_bank_info *img_bank_info;
+
+	img_entry = &data->fwu_images[0];
+	for (i = 0; i < CONFIG_FWU_NUM_IMAGES_PER_BANK; i++) {
+		img_bank_info = &img_entry[i].img_bank_info[bank];
+		if (!img_bank_info->accepted)
+			return false;
+	}
+
+	return true;
+}
+
 static int trial_counter_update(u16 *trial_state_ctr)
 {
 	bool delete;
@@ -88,6 +113,8 @@ static int fwu_trial_count_update(void)
 		ret = fwu_revert_boot_index();
 		if (ret)
 			log_err("Unable to revert active_index\n");
+
+		trial_counter_update(NULL);
 		ret = 1;
 	} else {
 		log_info("Trial State count: attempt %d out of %d\n",
@@ -629,6 +656,16 @@ __weak void fwu_plat_get_bootidx(uint *boot_idx)
 }
 
 /**
+ * fwu_platform_hook() - Platform specific processing with FWU metadata
+ *
+ * Return: 0 if OK, -ve on error
+ */
+__weak int fwu_platform_hook(struct udevice *dev, struct fwu_data *data)
+{
+	return 0;
+}
+
+/**
  * fwu_update_checks_pass() - Check if FWU update can be done
  *
  * Check if the FWU update can be executed. The updates are
@@ -685,6 +722,7 @@ static int fwu_boottime_checks(void)
 {
 	int ret;
 	u32 boot_idx, active_idx;
+	struct fwu_data *data;
 
 	ret = uclass_first_device_err(UCLASS_FWU_MDATA, &g_dev);
 	if (ret) {
@@ -737,11 +775,18 @@ static int fwu_boottime_checks(void)
 		return 0;
 
 	in_trial = in_trial_state();
-	if (!in_trial || (ret = fwu_trial_count_update()) > 0)
-		ret = trial_counter_update(NULL);
+
+	ret = in_trial ? fwu_trial_count_update() : trial_counter_update(NULL);
 
 	if (!ret)
 		boottime_check = 1;
+
+	data = fwu_get_data();
+	ret = fwu_platform_hook(g_dev, data);
+	if (ret) {
+		log_err("fwu_platform_hook() failed\n");
+		return ret;
+	}
 
 	return 0;
 }

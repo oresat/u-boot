@@ -215,9 +215,16 @@ config TARGET_X530
 	bool "Support Allied Telesis x530"
 	select 88F6820
 
+config TARGET_X250
+	bool "Support Allied Telesis x250"
+	select ARMADA_8K
+	imply SCSI
+	imply BOOTSTD_DEFAULTS
+
 config TARGET_X240
 	bool "Support Allied Telesis x240"
 	select ALLEYCAT_5
+	imply BOOTSTD_DEFAULTS
 
 config TARGET_DB_XC3_24G4XG
 	bool "Support DB-XC3-24G4XG"
@@ -253,7 +260,7 @@ config DDR_LOG_LEVEL
 	  failure, RL, WL errors and other algorithm failure.  At level 1,
 	  provides the D-Unit setup (SPD/Static configuration).  At level 2,
 	  provides the windows margin as a results of DQS centeralization.
-	  At level 3, rovides the windows margin of each DQ as a results of
+	  At level 3, provides the windows margin of each DQ as a results of
 	  DQS centeralization.
 
 config DDR_IMMUTABLE_DEBUG_SETTINGS
@@ -301,6 +308,7 @@ config SYS_BOARD
 	default "theadorable" if TARGET_THEADORABLE
 	default "a38x" if TARGET_CONTROLCENTERDC
 	default "x530" if TARGET_X530
+	default "x250" if TARGET_X250
 	default "x240" if TARGET_X240
 	default "db-xc3-24g4xg" if TARGET_DB_XC3_24G4XG
 	default "crs3xx-98dx3236" if TARGET_CRS3XX_98DX3236
@@ -325,6 +333,7 @@ config SYS_CONFIG_NAME
 	default "turris_mox" if TARGET_TURRIS_MOX
 	default "controlcenterdc" if TARGET_CONTROLCENTERDC
 	default "x530" if TARGET_X530
+	default "x250" if TARGET_X250
 	default "x240" if TARGET_X240
 	default "db-xc3-24g4xg" if TARGET_DB_XC3_24G4XG
 	default "crs3xx-98dx3236" if TARGET_CRS3XX_98DX3236
@@ -349,6 +358,7 @@ config SYS_VENDOR
 	default "CZ.NIC" if TARGET_TURRIS_MOX
 	default "gdsys" if TARGET_CONTROLCENTERDC
 	default "alliedtelesis" if TARGET_X530
+	default "alliedtelesis" if TARGET_X250
 	default "alliedtelesis" if TARGET_X240
 	default "mikrotik" if TARGET_CRS3XX_98DX3236
 	default "Marvell" if TARGET_MVEBU_ALLEYCAT5
@@ -384,7 +394,6 @@ config MVEBU_SPL_BOOT_DEVICE_MMC
 	imply SPL_LIBDISK_SUPPORT
 	imply SPL_MMC
 	select SUPPORT_EMMC_BOOT if SPL_MMC
-	select SYS_MMCSD_RAW_MODE_U_BOOT_USE_SECTOR if SPL_MMC
 	select SPL_BOOTROM_SUPPORT
 
 config MVEBU_SPL_BOOT_DEVICE_SATA
@@ -440,7 +449,7 @@ config MVEBU_EFUSE_VHV_GPIO
 	string "VHV_Enable GPIO name for eFuse programming"
 	depends on MVEBU_EFUSE && !ARMADA_3700
 	help
-	  The eFuse programing (burning) phase requires supplying 1.8V to the
+	  The eFuse programming (burning) phase requires supplying 1.8V to the
 	  device on the VHV power pin, while for normal operation the VHV power
 	  rail must be left unconnected. See Marvell AN-389: ARMADA VHV Power
 	  document (Doc. No. MV-S302545-00 Rev. C, August 2, 2016) for details.

@@ -8,6 +8,54 @@
 #if IS_ENABLED(CONFIG_TARGET_J722S_R5_EVM)
 
 &binman {
+	tiboot3-j722s-hs-evm.bin {
+		filename = "tiboot3-j722s-hs-evm.bin";
+		ti-secure-rom {
+			content = <&u_boot_spl>, <&ti_fs_enc>, <&combined_tifs_cfg>,
+				  <&combined_dm_cfg>, <&sysfw_inner_cert>;
+			combined;
+			dm-data;
+			sysfw-inner-cert;
+			keyfile = "custMpk.pem";
+			sw-rev = <1>;
+			content-sbl = <&u_boot_spl>;
+			content-sysfw = <&ti_fs_enc>;
+			content-sysfw-data = <&combined_tifs_cfg>;
+			content-sysfw-inner-cert = <&sysfw_inner_cert>;
+			content-dm-data = <&combined_dm_cfg>;
+			load = <CONFIG_SPL_TEXT_BASE>;
+			load-sysfw = <0x40000>;
+			load-sysfw-data = <0x67000>;
+			load-dm-data = <0x43c7a800>;
+		};
+
+		u_boot_spl: u-boot-spl {
+			no-expanded;
+		};
+
+		ti_fs_enc: ti-fs-enc.bin {
+			filename = "ti-sysfw/ti-fs-firmware-j722s-hs-enc.bin";
+			type = "blob-ext";
+		};
+
+		combined_tifs_cfg: combined-tifs-cfg.bin {
+			filename = "combined-tifs-cfg.bin";
+			type = "blob-ext";
+		};
+
+		sysfw_inner_cert: sysfw-inner-cert {
+			filename = "ti-sysfw/ti-fs-firmware-j722s-hs-cert.bin";
+			type = "blob-ext";
+		};
+
+		combined_dm_cfg: combined-dm-cfg.bin {
+			filename = "combined-dm-cfg.bin";
+			type = "blob-ext";
+		};
+	};
+};
+
+&binman {
 	tiboot3-j722s-hs-fs-evm.bin {
 		filename = "tiboot3-j722s-hs-fs-evm.bin";
 		symlink = "tiboot3.bin";
@@ -25,7 +73,7 @@
 			content-sysfw-data = <&combined_tifs_cfg_fs>;
 			content-sysfw-inner-cert = <&sysfw_inner_cert_fs>;
 			content-dm-data = <&combined_dm_cfg_fs>;
-			load = <0x43c00000>;
+			load = <CONFIG_SPL_TEXT_BASE>;
 			load-sysfw = <0x40000>;
 			load-sysfw-data = <0x67000>;
 			load-dm-data = <0x43c7a800>;
@@ -38,7 +86,6 @@
 		ti_fs_enc_fs: ti-fs-enc.bin {
 			filename = "ti-sysfw/ti-fs-firmware-j722s-hs-fs-enc.bin";
 			type = "blob-ext";
-			optional;
 		};
 
 		combined_tifs_cfg_fs: combined-tifs-cfg.bin {
@@ -49,7 +96,6 @@
 		sysfw_inner_cert_fs: sysfw-inner-cert {
 			filename = "ti-sysfw/ti-fs-firmware-j722s-hs-fs-cert.bin";
 			type = "blob-ext";
-			optional;
 		};
 
 		combined_dm_cfg_fs: combined-dm-cfg.bin {
@@ -66,15 +112,6 @@
 #define J722S_EVM_DTB "u-boot.dtb"
 
 &binman {
-	ti-dm {
-		filename = "ti-dm.bin";
-
-		blob-ext {
-			filename = "ti-dm/j722s/ipc_echo_testb_mcu1_0_release_strip.xer5f";
-			optional;
-		};
-	};
-
 	ti-spl {
 		insert-template = <&ti_spl_template>;
 
@@ -87,7 +124,7 @@
 					};
 
 					dm: ti-dm {
-						filename = "ti-dm.bin";
+						filename = "ti-dm/j722s/ipc_echo_testb_mcu1_0_release_strip.xer5f";
 					};
 				};
 

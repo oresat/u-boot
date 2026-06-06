@@ -6,6 +6,7 @@ Board-specific doc
 .. toctree::
    :maxdepth: 2
 
+   acer/index
    actions/index
    advantech/index
    andestech/index
@@ -14,15 +15,19 @@ Board-specific doc
    anbernic/index
    apple/index
    armltd/index
+   aspeed/index
    asus/index
    atmel/index
    beacon/index
    beagle/index
    broadcom/index
    bsh/index
+   canaan/index
    cloos/index
    congatec/index
+   coolpi/index
    coreboot/index
+   emcraft/index
    emulation/index
    gateworks/index
    google/index
@@ -33,14 +38,20 @@ Board-specific doc
    kontron/index
    lenovo/index
    lg/index
+   liebherr/index
    mediatek/index
    microchip/index
    microsoft/index
+   motorola/index
+   nvidia/index
    nxp/index
    openpiton/index
+   ouya/index
+   pegatron/index
    phytec/index
    purism/index
    qualcomm/index
+   qnap/index
    renesas/index
    rockchip/index
    samsung/index
@@ -51,6 +62,7 @@ Board-specific doc
    sipeed/index
    socionext/index
    sophgo/index
+   spacemit/index
    st/index
    starfive/index
    ste/index
@@ -62,4 +74,5 @@ Board-specific doc
    variscite/index
    wexler/index
    xen/index
+   xiaomi/index
    xilinx/index

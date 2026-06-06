@@ -29,7 +29,6 @@
 		ti_sci_enc: ti-fs-enc.bin {
 			filename = "ti-sysfw/ti-sci-firmware-am64x_sr2-hs-enc.bin";
 			type = "blob-ext";
-			optional;
 		};
 		combined_sysfw_cfg: combined-sysfw-cfg.bin {
 			filename = "combined-sysfw-cfg.bin";
@@ -38,7 +37,6 @@
 		sysfw_inner_cert: sysfw-inner-cert {
 			filename = "ti-sysfw/ti-sci-firmware-am64x_sr2-hs-cert.bin";
 			type = "blob-ext";
-			optional;
 		};
 
 	};
@@ -69,7 +67,6 @@
 		ti_sci_enc_fs: ti-fs-enc.bin {
 			filename = "ti-sysfw/ti-sci-firmware-am64x_sr2-hs-fs-enc.bin";
 			type = "blob-ext";
-			optional;
 		};
 		combined_sysfw_cfg_fs: combined-sysfw-cfg.bin {
 			filename = "combined-sysfw-cfg.bin";
@@ -78,7 +75,6 @@
 		sysfw_inner_cert_fs: sysfw-inner-cert {
 			filename = "ti-sysfw/ti-sci-firmware-am64x_sr2-hs-fs-cert.bin";
 			type = "blob-ext";
-			optional;
 		};
 
 	};
@@ -105,7 +101,6 @@
 		ti_sci_gp: ti-sci-gp.bin {
 			filename = "ti-sysfw/ti-sci-firmware-am64x-gp.bin";
 			type = "blob-ext";
-			optional;
 		};
 		combined_sysfw_cfg_gp: combined-sysfw-cfg-gp.bin {
 			filename = "combined-sysfw-cfg.bin";
@@ -144,6 +139,37 @@
 			#address-cells = <1>;
 
 			images {
+				atf {
+					ti-secure {
+						auth-in-place = <0xa02>;
+
+						firewall-24-5 {
+							insert-template = <&firewall_armv8_atf_fg>;
+							id = <24>;
+							region = <5>;
+						};
+					};
+				};
+
+				tee {
+					ti-secure {
+						auth-in-place = <0xa02>;
+
+						firewall-1-0 {
+							insert-template = <&firewall_bg_3>;
+							id = <1>;
+							region = <0>;
+						};
+
+
+						firewall-1-1 {
+							insert-template = <&firewall_armv8_optee_fg>;
+							id = <1>;
+							region = <1>;
+						};
+					};
+				};
+
 				dm {
 					blob-ext {
 						filename = "/dev/null";

@@ -10,14 +10,18 @@
 #include <env.h>
 #include <image.h>
 #include <log.h>
+#ifdef CONFIG_CMD_ELF_BOOTVX
 #include <net.h>
 #include <vxworks.h>
+#endif
 #ifdef CONFIG_X86
 #include <vesa.h>
 #include <asm/cache.h>
 #include <asm/e820.h>
 #include <linux/linkage.h>
 #endif
+
+#define BOOTLINE_BUF_LEN 128
 
 /* Interpreter command to boot an arbitrary ELF image from memory */
 int do_bootelf(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv[])
@@ -70,7 +74,7 @@ int do_bootelf(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv[])
 
 		fdt_set_totalsize((void *)fdt_addr,
 				fdt_totalsize(fdt_addr) + CONFIG_SYS_FDT_PAD);
-		if (image_setup_libfdt(&img, (void *)fdt_addr, NULL))
+		if (image_setup_libfdt(&img, (void *)fdt_addr, false))
 			return 1;
 	}
 #endif
@@ -100,6 +104,7 @@ int do_bootelf(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv[])
 	return rcode;
 }
 
+#ifdef CONFIG_CMD_ELF_BOOTVX
 /*
  * Interpreter command to boot VxWorks from a memory image.  The image can
  * be either an ELF image or a raw binary.  Will attempt to setup the
@@ -111,7 +116,7 @@ int do_bootvx(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv[])
 	unsigned long bootaddr = 0; /* Address to put the bootline */
 	char *bootline; /* Text of the bootline */
 	char *tmp; /* Temporary char pointer */
-	char build_buf[128]; /* Buffer for building the bootline */
+	char build_buf[BOOTLINE_BUF_LEN]; /* Buffer for building the bootline */
 	int ptr = 0;
 #ifdef CONFIG_X86
 	ulong base;
@@ -130,7 +135,7 @@ int do_bootvx(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv[])
 	else
 		addr = hextoul(argv[1], NULL);
 
-#if defined(CONFIG_CMD_NET)
+#if defined(CONFIG_CMD_NET) && !defined(CONFIG_NET_LWIP)
 	/*
 	 * Check to see if we need to tftp the image ourselves
 	 * before starting
@@ -223,7 +228,7 @@ int do_bootvx(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv[])
 	if (!bootline) {
 		tmp = env_get("bootdev");
 		if (tmp) {
-			strcpy(build_buf, tmp);
+			strlcpy(build_buf, tmp, BOOTLINE_BUF_LEN);
 			ptr = strlen(tmp);
 		} else {
 			printf("## VxWorks boot device not specified\n");
@@ -244,7 +249,7 @@ int do_bootvx(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv[])
 			ptr += sprintf(build_buf + ptr, "e=%s", tmp);
 			tmp = env_get("netmask");
 			if (tmp) {
-				u32 mask = env_get_ip("netmask").s_addr;
+				u32 mask = string_to_ip(tmp).s_addr;
 				ptr += sprintf(build_buf + ptr,
 					       ":%08x ", ntohl(mask));
 			} else {
@@ -307,6 +312,7 @@ int do_bootvx(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv[])
 
 	return 1;
 }
+#endif
 
 U_BOOT_CMD(
 	bootelf, CONFIG_SYS_MAXARGS, 0, do_bootelf,
@@ -323,8 +329,10 @@ U_BOOT_CMD(
 #endif
 );
 
+#ifdef CONFIG_CMD_ELF_BOOTVX
 U_BOOT_CMD(
 	bootvx, 2, 0, do_bootvx,
 	"Boot vxWorks from an ELF image",
 	" [address] - load address of vxWorks ELF image."
 );
+#endif

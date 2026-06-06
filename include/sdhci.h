@@ -143,7 +143,7 @@
 #define  SDHCI_INT_CMD_MASK	(SDHCI_INT_RESPONSE | SDHCI_INT_TIMEOUT | \
 		SDHCI_INT_CRC | SDHCI_INT_END_BIT | SDHCI_INT_INDEX)
 #define  SDHCI_INT_DATA_MASK	(SDHCI_INT_DATA_END | SDHCI_INT_DMA_END | \
-		SDHCI_INT_DATA_AVAIL | SDHCI_INT_SPACE_AVAIL | \
+		SDHCI_INT_SPACE_AVAIL | SDHCI_INT_DATA_AVAIL | \
 		SDHCI_INT_DATA_TIMEOUT | SDHCI_INT_DATA_CRC | \
 		SDHCI_INT_DATA_END_BIT | SDHCI_INT_ADMA_ERROR)
 #define SDHCI_INT_ALL_MASK	((unsigned int)-1)
@@ -223,6 +223,9 @@
 #define   SDHCI_SPEC_100	0
 #define   SDHCI_SPEC_200	1
 #define   SDHCI_SPEC_300	2
+#define   SDHCI_SPEC_400	3
+#define   SDHCI_SPEC_410	4
+#define   SDHCI_SPEC_420	5
 
 #define SDHCI_GET_VERSION(x) (x->version & SDHCI_SPEC_VER_MASK)
 
@@ -518,6 +521,7 @@ void sdhci_set_uhs_timing(struct sdhci_host *host);
 /* Export the operations to drivers */
 int sdhci_probe(struct udevice *dev);
 int sdhci_set_clock(struct mmc *mmc, unsigned int clock);
+void sdhci_set_voltage(struct sdhci_host *host);
 
 /**
  * sdhci_set_control_reg - Set control registers

@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0 */
 /*
  * Copyright (C) 2016 - 2022, Xilinx, Inc.
- * Copyright (C) 2022 - 2024, Advanced Micro Devices, Inc.
+ * Copyright (C) 2022 - 2025, Advanced Micro Devices, Inc.
  */
 
 #ifndef __ASSEMBLY__
@@ -51,7 +51,8 @@ struct crp_regs {
 #define PMC_TAP_VERSION		(PMC_TAP + 0x4)
 # define PMC_VERSION_MASK	GENMASK(7, 0)
 # define PS_VERSION_MASK	GENMASK(15, 8)
-# define PS_VERSION_PRODUCTION	0x20
+# define PS_VERSION_MAJOR	GENMASK(7, 4)
+# define PS_VERSION_MINOR	GENMASK(3, 0)
 # define RTL_VERSION_MASK	GENMASK(23, 16)
 # define PLATFORM_MASK		GENMASK(27, 24)
 # define PLATFORM_VERSION_MASK	GENMASK(31, 28)
@@ -67,10 +68,13 @@ struct crp_regs {
 #define USB_MODE	0x00000007
 #define OSPI_MODE	0x00000008
 #define SELECTMAP_MODE	0x0000000A
+#define UFS_MODE	0x0000000B
 #define SD1_LSHFT_MODE	0x0000000E /* SD1 Level shifter */
 #define JTAG_MODE	0x00000000
 #define BOOT_MODE_USE_ALT	0x100
 #define BOOT_MODE_ALT_SHIFT	12
+#define PMC_MULTI_BOOT_REG	0xF1110004
+#define PMC_MULTI_BOOT_MASK	0x1FFF
 
 enum versal2_platform {
 	VERSAL2_SILICON = 0,
@@ -95,3 +99,9 @@ enum versal2_platform {
 #define MIO_PIN_12	0xF1060030
 #define BANK0_OUTPUT	0xF1020040
 #define BANK0_TRI	0xF1060200
+
+#define PMXC_EFUSE_CACHE_BASE_ADDRESS	0xF1250000
+#define PMXC_SLCR_BASE_ADDRESS		0xF1061000
+#define PMXC_UFS_CAL_1_OFFSET		0xBE8
+#define PMXC_SRAM_CSR			0x4C
+#define PMXC_TX_RX_CFG_RDY		0x54

@@ -35,7 +35,9 @@ static int soc_amd_versal2_get_revision(struct udevice *dev, char *buf, int size
 {
 	struct soc_amd_versal2_priv *priv = dev_get_priv(dev);
 
-	return snprintf(buf, size, "v%d", priv->revision);
+	return snprintf(buf, size, "v%d.%d",
+			(u32)FIELD_GET(PS_VERSION_MAJOR, priv->revision),
+			(u32)FIELD_GET(PS_VERSION_MINOR, priv->revision));
 }
 
 static const struct soc_ops soc_amd_versal2_ops = {
@@ -53,7 +55,7 @@ static int soc_amd_versal2_probe(struct udevice *dev)
 
 	if (IS_ENABLED(CONFIG_ZYNQMP_FIRMWARE)) {
 		ret = xilinx_pm_request(PM_GET_CHIPID, 0, 0, 0, 0,
-					ret_payload);
+					0, 0, ret_payload);
 		if (ret)
 			return ret;
 	} else {

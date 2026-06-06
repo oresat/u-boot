@@ -108,7 +108,13 @@ int ext4fs_get_bgdtable(void)
 {
 	int status;
 	struct ext_filesystem *fs = get_fs();
-	int gdsize_total = ROUND(fs->no_blkgrp * fs->gdsize, fs->blksz);
+	size_t alloc;
+	size_t gdsize_total;
+
+	if (__builtin_mul_overflow(fs->no_blkgrp, fs->gdsize, &alloc))
+		return -1;
+
+	gdsize_total = ROUND(alloc, fs->blksz);
 	fs->no_blk_pergdt = gdsize_total / fs->blksz;
 
 	/* allocate memory for gdtable */
@@ -205,7 +211,7 @@ static void delete_double_indirect_block(struct ext2_inode *inode)
 		di_buffer = zalloc(fs->blksz);
 		if (!di_buffer) {
 			printf("No memory\n");
-			return;
+			goto fail;
 		}
 		dib_start_addr = di_buffer;
 		blknr = le32_to_cpu(inode->b.blocks.double_indir_block);
@@ -304,7 +310,7 @@ static void delete_triple_indirect_block(struct ext2_inode *inode)
 		tigp_buffer = zalloc(fs->blksz);
 		if (!tigp_buffer) {
 			printf("No memory\n");
-			return;
+			goto fail;
 		}
 		tib_start_addr = tigp_buffer;
 		blknr = le32_to_cpu(inode->b.blocks.triple_indir_block);
@@ -866,6 +872,7 @@ int ext4fs_write(const char *fname, const char *buffer,
 	ALLOC_CACHE_ALIGN_BUFFER(char, filename, 256);
 	bool store_link_in_inode = false;
 	memset(filename, 0x00, 256);
+	int missing_feat;
 
 	if (type != FILETYPE_REG && type != FILETYPE_SYMLINK)
 		return -1;
@@ -876,12 +883,20 @@ int ext4fs_write(const char *fname, const char *buffer,
 
 	if (ext4fs_init() != 0) {
 		printf("error in File System init\n");
-		return -1;
+		/* Skip ext4fs_deinit since ext4fs_init() already done that */
+		goto fail_init;
 	}
 
-	if (le32_to_cpu(fs->sb->feature_ro_compat) & EXT4_FEATURE_RO_COMPAT_METADATA_CSUM) {
-		printf("Unsupported feature metadata_csum found, not writing.\n");
-		return -1;
+	missing_feat = le32_to_cpu(fs->sb->feature_incompat) & ~EXT4_FEATURE_INCOMPAT_SUPP;
+	if (missing_feat) {
+		log_err("Unsupported features found %08x, not writing.\n", missing_feat);
+		goto fail;
+	}
+
+	missing_feat = le32_to_cpu(fs->sb->feature_ro_compat) & ~EXT4_FEATURE_RO_COMPAT_SUPP;
+	if (missing_feat) {
+		log_err("Unsupported RO compat features found %08x, not writing.\n", missing_feat);
+		goto fail;
 	}
 
 	inodes_per_block = fs->blksz / fs->inodesz;
@@ -1042,6 +1057,7 @@ int ext4fs_write(const char *fname, const char *buffer,
 	return 0;
 fail:
 	ext4fs_deinit();
+fail_init:
 	free(inode_buffer);
 	free(g_parent_inode);
 	free(temp_ptr);

@@ -28,10 +28,10 @@
 			"Headphone Jack", "HPOUTR",
 			"IN2L", "Line In Jack",
 			"IN2R", "Line In Jack",
-			"Headphone Jack", "MICBIAS",
-			"IN1L", "Headphone Jack";
+			"Microphone Jack", "MICBIAS",
+			"IN1L", "Microphone Jack";
 		simple-audio-card,widgets =
-			"Microphone", "Headphone Jack",
+			"Microphone", "Microphone Jack",
 			"Headphone", "Headphone Jack",
 			"Line", "Line In Jack";
 
@@ -42,15 +42,6 @@
 		simple-audio-card,cpu {
 			sound-dai = <&mcasp0>;
 		};
-	};
-
-	reg_usb_hub: regulator-usb-hub {
-		compatible = "regulator-fixed";
-		enable-active-high;
-		/* Verdin CTRL_SLEEP_MOCI# (SODIMM 256) */
-		gpio = <&main_gpio0 31 GPIO_ACTIVE_HIGH>;
-		regulator-boot-on;
-		regulator-name = "HUB_PWR_EN";
 	};
 };
 
@@ -123,7 +114,7 @@
 
 	/* EEPROM */
 	eeprom@57 {
-		compatible = "st,24c02";
+		compatible = "st,24c02", "atmel,24c02";
 		reg = <0x57>;
 		pagesize = <16>;
 	};
@@ -193,11 +184,6 @@
 	status = "okay";
 };
 
-/* Do not force CTRL_SLEEP_MOCI# always enabled */
-&reg_force_sleep_moci {
-	status = "disabled";
-};
-
 /* Verdin SD_1 */
 &sdhci1 {
 	status = "okay";
@@ -218,15 +204,7 @@
 };
 
 &usb1 {
-	#address-cells = <1>;
-	#size-cells = <0>;
 	status = "okay";
-
-	usb-hub@1 {
-		compatible = "usb424,2744";
-		reg = <1>;
-		vdd-supply = <&reg_usb_hub>;
-	};
 };
 
 /* Verdin CTRL_WAKE1_MICO# */

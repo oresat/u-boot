@@ -64,10 +64,9 @@
  * - boot instance = bit 31:16
  * - boot device = bit 15:0
  */
-#define BOOTROM_PARAM_ADDR	0x2FFC0078
 #define BOOTROM_MODE_MASK	GENMASK(15, 0)
 #define BOOTROM_MODE_SHIFT	0
-#define BOOTROM_INSTANCE_MASK	 GENMASK(31, 16)
+#define BOOTROM_INSTANCE_MASK	GENMASK(31, 16)
 #define BOOTROM_INSTANCE_SHIFT	16
 
 /* Device Part Number (RPN) = OTP_DATA1 lower 8 bits */
@@ -189,7 +188,7 @@ void spl_board_init(void)
 static void update_bootmode(void)
 {
 	u32 boot_mode;
-	u32 bootrom_itf = readl(BOOTROM_PARAM_ADDR);
+	u32 bootrom_itf = readl(get_stm32mp_rom_api_table());
 	u32 bootrom_device, bootrom_instance;
 
 	/* enable TAMP clock = RTCAPBEN */
@@ -214,13 +213,13 @@ static void update_bootmode(void)
 /* weak function: STM32MP15x mach init for boot without TFA */
 void stm32mp_cpu_init(void)
 {
-	if (IS_ENABLED(CONFIG_SPL_BUILD)) {
+	if (IS_ENABLED(CONFIG_XPL_BUILD)) {
 		security_init();
 		update_bootmode();
 	}
 
 	/* reset copro state in SPL, when used, or in U-Boot */
-	if (!IS_ENABLED(CONFIG_SPL) || IS_ENABLED(CONFIG_SPL_BUILD)) {
+	if (!IS_ENABLED(CONFIG_SPL) || IS_ENABLED(CONFIG_XPL_BUILD)) {
 		/* Reset Coprocessor state unless it wakes up from Standby power mode */
 		if (!(readl(PWR_MCUCR) & PWR_MCUCR_SBF)) {
 			writel(TAMP_COPRO_STATE_OFF, TAMP_COPRO_STATE);

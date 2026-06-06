@@ -17,6 +17,8 @@
 
 #define QUPV3_WRAP0_S4_CMD_RCGR 0x1f608
 #define SDCC2_APPS_CLK_CMD_RCGR 0x1e00c
+#define SDCC1_APPS_CLK_CMD_RCGR 0x38028
+
 
 static const struct freq_tbl ftbl_gcc_qupv3_wrap0_s0_clk_src[] = {
 	F(7372800, CFG_CLK_SRC_GPLL0_AUX2, 1, 384, 15625),
@@ -55,6 +57,25 @@ static const struct pll_vote_clk gpll7_clk = {
 	.vote_bit = BIT(7),
 };
 
+static const struct freq_tbl ftbl_gcc_sdcc1_apps_clk_src[] = {
+	F(144000, CFG_CLK_SRC_CXO, 16, 3, 25),
+	F(400000, CFG_CLK_SRC_CXO, 12, 1, 4),
+	F(20000000, CFG_CLK_SRC_GPLL0_AUX2, 5, 1, 3),
+	F(25000000, CFG_CLK_SRC_GPLL0_AUX2, 6, 1, 2),
+	F(50000000, CFG_CLK_SRC_GPLL0_AUX2, 6, 0, 0),
+	F(100000000, CFG_CLK_SRC_GPLL0_AUX2, 3, 0, 0),
+	F(192000000, CFG_CLK_SRC_GPLL6, 2, 0, 0),
+	F(384000000, CFG_CLK_SRC_GPLL6, 1, 0, 0),
+	{}
+};
+
+static const struct pll_vote_clk gpll6_clk = {
+	.status = 0x6000,
+	.status_bit = BIT(31),
+	.ena_vote = 0x79000,
+	.vote_bit = BIT(7),
+};
+
 static const struct gate_clk qcm2290_clks[] = {
 	GATE_CLK(GCC_AHB2PHY_USB_CLK, 0x1d008, 0x00000001),
 	GATE_CLK(GCC_CFG_NOC_USB3_PRIM_AXI_CLK, 0x1a084, 0x00000001),
@@ -88,7 +109,7 @@ static ulong qcm2290_set_rate(struct clk *clk, ulong rate)
 	struct msm_clk_priv *priv = dev_get_priv(clk->dev);
 	const struct freq_tbl *freq;
 
-	debug("%s: clk %s rate %lu\n", __func__, clk->dev->name, rate);
+	debug("%s: clk %s rate %lu\n", __func__, qcm2290_clks[clk->id].name, rate);
 
 	switch (clk->id) {
 	case GCC_QUPV3_WRAP0_S4_CLK: /*UART2*/
@@ -109,8 +130,12 @@ static ulong qcm2290_set_rate(struct clk *clk, ulong rate)
 				     8);
 		return freq->freq;
 	case GCC_SDCC1_APPS_CLK:
-		/* The firmware turns this on for us and always sets it to this rate */
-		return 384000000;
+		clk_enable_gpll0(priv->base, &gpll6_clk);
+		freq = qcom_find_freq(ftbl_gcc_sdcc1_apps_clk_src, rate);
+		clk_rcg_set_rate_mnd(priv->base, SDCC1_APPS_CLK_CMD_RCGR,
+				     freq->pre_div, freq->m, freq->n, freq->src,
+				     8);
+		return freq->freq;
 	default:
 		return 0;
 	}
@@ -134,9 +159,7 @@ static int qcm2290_enable(struct clk *clk)
 		break;
 	}
 
-	qcom_gate_clk_en(priv, clk->id);
-
-	return 0;
+	return qcom_gate_clk_en(priv, clk->id);
 }
 
 static const struct qcom_reset_map qcm2290_gcc_resets[] = {

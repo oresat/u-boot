@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0+
 /*
- * Renesas RCar IIC driver
+ * Renesas R-Car IIC driver
  *
  * Copyright (C) 2017 Marek Vasut <marek.vasut@gmail.com>
  *
@@ -191,7 +191,7 @@ static int rcar_iic_xfer(struct udevice *dev, struct i2c_msg *msg, int nmsgs)
 			return -EREMOTEIO;
 	}
 
-	return ret;
+	return 0;
 }
 
 static int rcar_iic_set_speed(struct udevice *dev, uint speed)

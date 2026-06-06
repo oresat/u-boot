@@ -322,10 +322,12 @@ Notes
    the memory footprint of the code. Remember: Small is beautiful! When adding
    new features follow the guidelines laid out in :doc:`system_configuration`.
 
+.. _patchwork:
+
 Patch Tracking
 --------------
 
-Like some other projects, U-Boot uses `Patchwork <http://patchwork.ozlabs.org/>`_
+Like some other projects, U-Boot uses `Patchwork <http://patchwork.ozlabs.org/>`__
 to track the state of patches. This is one of the reasons why it is mandatory
 to submit all patches to the U-Boot mailing list - only then they will be
 picked up by patchwork.
@@ -377,7 +379,7 @@ The following are a "rule of thumb" as to how the states are used in patchwork
 today. Not all states are used by all custodians.
 
 * New: Patch has been submitted to the list, and none of the maintainers has
-  changed it's state since.
+  changed its state since.
 
 * Under Review: A custodian is reviewing the patch currently.
 

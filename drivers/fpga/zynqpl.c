@@ -360,8 +360,8 @@ static int zynq_validate_bitstream(xilinx_desc *desc, const void *buf,
 	}
 
 	if ((u32)buf < SZ_1M) {
-		printf("%s: Bitstream has to be placed up to 1MB (%x)\n",
-		       __func__, (u32)buf);
+		log_err("Bitstream has to be placed above 1MB (%x)\n",
+			(u32)buf);
 		return FPGA_FAIL;
 	}
 
@@ -414,13 +414,13 @@ static int zynq_load(xilinx_desc *desc, const void *buf, size_t bsize,
 	if (bstype != BIT_PARTIAL)
 		zynq_slcr_devcfg_enable();
 
-	if (!IS_ENABLED(CONFIG_SPL_BUILD))
+	if (!IS_ENABLED(CONFIG_XPL_BUILD))
 		puts("INFO:post config was not run, please run manually if needed\n");
 
 	return FPGA_SUCCESS;
 }
 
-#if defined(CONFIG_CMD_FPGA_LOADFS) && !defined(CONFIG_SPL_BUILD)
+#if defined(CONFIG_CMD_FPGA_LOADFS) && !defined(CONFIG_XPL_BUILD)
 static int zynq_loadfs(xilinx_desc *desc, const void *buf, size_t bsize,
 		       fpga_fs_info *fsinfo)
 {
@@ -504,7 +504,7 @@ static int zynq_loadfs(xilinx_desc *desc, const void *buf, size_t bsize,
 
 struct xilinx_fpga_op zynq_op = {
 	.load = zynq_load,
-#if defined(CONFIG_CMD_FPGA_LOADFS) && !defined(CONFIG_SPL_BUILD)
+#if defined(CONFIG_CMD_FPGA_LOADFS) && !defined(CONFIG_XPL_BUILD)
 	.loadfs = zynq_loadfs,
 #endif
 };

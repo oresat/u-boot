@@ -12,6 +12,7 @@
 #include <env_internal.h>
 #include <log.h>
 #include <malloc.h>
+#include <spi.h>
 #include <time.h>
 #include <asm/cache.h>
 #include <asm/global_data.h>
@@ -20,6 +21,8 @@
 #include <asm/arch/sys_proto.h>
 #include <dm/device.h>
 #include <dm/uclass.h>
+#include <zynqmp_firmware.h>
+#include <versalpl.h>
 #include "../common/board.h"
 
 #include <linux/bitfield.h>
@@ -28,10 +31,21 @@
 
 DECLARE_GLOBAL_DATA_PTR;
 
+#if defined(CONFIG_FPGA_VERSALPL)
+static xilinx_desc versalpl = {
+	xilinx_versal_net, csu_dma, 1, &versal_op, 0, &versal_op, NULL,
+	FPGA_LEGACY
+};
+#endif
+
 int board_init(void)
 {
 	printf("EL Level:\tEL%d\n", current_el());
 
+#if defined(CONFIG_FPGA_VERSALPL)
+	fpga_init();
+	fpga_add(fpga_xilinx, &versalpl);
+#endif
 	return 0;
 }
 
@@ -183,7 +197,11 @@ static u8 versal_net_get_bootmode(void)
 	u8 bootmode;
 	u32 reg = 0;
 
-	reg = readl(&crp_base->boot_mode_usr);
+	if (IS_ENABLED(CONFIG_ZYNQMP_FIRMWARE) && current_el() != 3) {
+		reg = zynqmp_pm_get_bootmode_reg();
+	} else {
+		reg = readl(&crp_base->boot_mode_usr);
+	}
 
 	if (reg >> BOOT_MODE_ALT_SHIFT)
 		reg >>= BOOT_MODE_ALT_SHIFT;
@@ -196,7 +214,6 @@ static u8 versal_net_get_bootmode(void)
 int spi_get_env_dev(void)
 {
 	struct udevice *dev;
-	const char *mode = NULL;
 	int bootseq = -1;
 
 	switch (versal_net_get_bootmode()) {
@@ -207,7 +224,6 @@ int spi_get_env_dev(void)
 			debug("QSPI driver for QSPI device is not present\n");
 			break;
 		}
-		mode = "xspi";
 		bootseq = dev_seq(dev);
 		break;
 	case QSPI_MODE_32BIT:
@@ -217,7 +233,6 @@ int spi_get_env_dev(void)
 			debug("QSPI driver for QSPI device is not present\n");
 			break;
 		}
-		mode = "xspi";
 		bootseq = dev_seq(dev);
 		break;
 	case OSPI_MODE:
@@ -227,7 +242,6 @@ int spi_get_env_dev(void)
 			debug("OSPI driver for OSPI device is not present\n");
 			break;
 		}
-		mode = "xspi";
 		bootseq = dev_seq(dev);
 		break;
 	default:

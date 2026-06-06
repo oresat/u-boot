@@ -89,11 +89,6 @@ void rk8xx_off_for_plugin(struct udevice *dev)
 	}
 }
 
-static struct reg_data rk806_init_reg[] = {
-	/* RST_FUN */
-	{ RK806_REG_SYS_CFG3, GENMASK(7, 6), BIT(7)},
-};
-
 static struct reg_data rk817_init_reg[] = {
 /* enable the under-voltage protection,
  * the under-voltage protection will shutdown the LDO3 and reset the PMIC
@@ -237,7 +232,7 @@ static int rk8xx_bind(struct udevice *dev)
 	if (!children)
 		debug("%s: %s - no child found\n", __func__, dev->name);
 
-	if (IS_ENABLED(CONFIG_SPL_BUILD) &&
+	if (IS_ENABLED(CONFIG_XPL_BUILD) &&
 	    IS_ENABLED(CONFIG_ROCKCHIP_RK8XX_DISABLE_BOOT_ON_POWERON))
 		dev_or_flags(dev, DM_FLAG_PROBE_AFTER_BIND);
 
@@ -306,12 +301,20 @@ static int rk8xx_probe(struct udevice *dev)
 		value = (power_en2 & 0x0f) | ((power_en3 & 0x0f) << 4);
 		pmic_reg_write(dev, RK817_POWER_EN_SAVE1, value);
 		break;
-	case RK806_ID:
+	case RK806_ID: {
+		u32 rst_fun = 2;
+
 		on_source = RK806_ON_SOURCE;
 		off_source = RK806_OFF_SOURCE;
-		init_data = rk806_init_reg;
-		init_data_num = ARRAY_SIZE(rk806_init_reg);
-		break;
+
+		ret = dev_read_u32(dev, "rockchip,reset-mode", &rst_fun);
+		if (ret)
+			debug("rockchip,reset-mode property missing, defaulting to %d\n",
+			      rst_fun);
+
+		pmic_clrsetbits(dev, RK806_REG_SYS_CFG3, RK806_RST_FUN_MSK,
+				FIELD_PREP(RK806_RST_FUN_MSK, rst_fun));
+		break; }
 	default:
 		printf("Unknown PMIC: RK%x!!\n", show_variant);
 		return -EINVAL;
@@ -331,7 +334,7 @@ static int rk8xx_probe(struct udevice *dev)
 		      pmic_reg_read(dev, init_data[i].reg));
 	}
 
-	if (!IS_ENABLED(CONFIG_SPL_BUILD)) {
+	if (!IS_ENABLED(CONFIG_XPL_BUILD)) {
 		printf("PMIC:  RK%x ", show_variant);
 		if (on_source && off_source)
 			printf("(on=0x%02x, off=0x%02x)",

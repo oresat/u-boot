@@ -217,15 +217,19 @@ static int cdns3_init_otg_mode(struct cdns3 *cdns)
 int cdns3_drd_update_mode(struct cdns3 *cdns)
 {
 	int ret = 0;
+	int mode;
 
 	switch (cdns->dr_mode) {
 	case USB_DR_MODE_PERIPHERAL:
+		mode = PHY_MODE_USB_DEVICE;
 		ret = cdns3_set_mode(cdns, USB_DR_MODE_PERIPHERAL);
 		break;
 	case USB_DR_MODE_HOST:
+		mode = PHY_MODE_USB_HOST;
 		ret = cdns3_set_mode(cdns, USB_DR_MODE_HOST);
 		break;
 	case USB_DR_MODE_OTG:
+		mode = PHY_MODE_USB_OTG;
 		ret = cdns3_init_otg_mode(cdns);
 		break;
 	default:
@@ -233,6 +237,16 @@ int cdns3_drd_update_mode(struct cdns3 *cdns)
 			cdns->dr_mode);
 		return -EINVAL;
 	}
+
+	ret = generic_phy_set_mode(&cdns->usb2_phy, mode, 0);
+	if (ret) {
+		dev_err(cdns->dev, "Set usb 2.0 PHY mode failed %d\n", ret);
+		return ret;
+	}
+
+	ret = generic_phy_set_mode(&cdns->usb3_phy, mode, 0);
+	if (ret)
+		dev_err(cdns->dev, "Set usb 3.0 PHY mode failed %d\n", ret);
 
 	return ret;
 }
@@ -285,6 +299,17 @@ int cdns3_drd_init(struct cdns3 *cdns)
 	} else if (state == OTGSTS_STRAP_GADGET) {
 		dev_dbg(cdns->dev, "Controller strapped to PERIPHERAL\n");
 		cdns->dr_mode = USB_DR_MODE_PERIPHERAL;
+	}
+
+	/*
+	 * In the absence of STRAP configuration, use VBUS Valid to
+	 * determine the appropriate role to be assigned to dr_mode.
+	 */
+	if (cdns->dr_mode == USB_DR_MODE_OTG) {
+		if (cdns3_get_vbus(cdns))
+			cdns->dr_mode = USB_DR_MODE_PERIPHERAL;
+		else
+			cdns->dr_mode = USB_DR_MODE_HOST;
 	}
 
 	state = readl(&cdns->otg_regs->sts);

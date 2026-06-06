@@ -49,8 +49,21 @@ executed all 10ms.
 How is this cyclic functionality integrated /  executed?
 --------------------------------------------------------
 
-The cyclic infrastructure integrates the main function responsible for
-calling all registered cyclic functions cyclic_run() into the common
-WATCHDOG_RESET macro. This guarantees that cyclic_run() is executed
-very often, which is necessary for the cyclic functions to get scheduled
-and executed at their configured periods.
+The cyclic infrastructure integrates cyclic_run(), the main function
+responsible for calling all registered cyclic functions, into the
+common schedule() function. This guarantees that cyclic_run() is
+executed very often, which is necessary for the cyclic functions to
+get scheduled and executed at their configured periods.
+
+Idempotence
+-----------
+
+Both the cyclic_register() and cyclic_unregister() functions are safe
+to call on any struct cyclic_info, regardless of whether that instance
+is already registered or not.
+
+More specifically, calling cyclic_unregister() with a cyclic_info
+which is not currently registered is a no-op, while calling
+cyclic_register() with a cyclic_info which is currently registered
+results in it being automatically unregistered, and then registered
+with the new callback function and timeout parameters.

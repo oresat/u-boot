@@ -19,7 +19,7 @@
 #include <part_efi.h>
 #include <part.h>
 #include <exports.h>
-#include <uuid.h>
+#include <u-boot/uuid.h>
 #include <linux/ctype.h>
 #include <div64.h>
 #include <memalign.h>
@@ -723,8 +723,8 @@ static int gpt_enumerate(struct blk_desc *desc)
 		if (part_drv->test(desc))
 			continue;
 
-		for (i = 1; i < part_drv->max_entries; i++) {
-			ret = part_drv->get_info(desc, i, &pinfo);
+		for (i = 1; i <= part_drv->max_entries; i++) {
+			ret = part_driver_get_info(part_drv, desc, i, &pinfo);
 			if (ret)
 				continue;
 
@@ -819,8 +819,8 @@ static int gpt_setenv(struct blk_desc *desc, const char *name)
 		struct disk_partition pinfo;
 		int i;
 
-		for (i = 1; i < part_drv->max_entries; i++) {
-			ret = part_drv->get_info(desc, i, &pinfo);
+		for (i = 1; i <= part_drv->max_entries; i++) {
+			ret = part_driver_get_info(part_drv, desc, i, &pinfo);
 			if (ret)
 				continue;
 
@@ -911,8 +911,9 @@ static int do_rename_gpt_parts(struct blk_desc *dev_desc, char *subcomm,
 		goto out;
 
 	if (!strcmp(subcomm, "swap")) {
-		if ((strlen(name1) > PART_NAME_LEN) || (strlen(name2) > PART_NAME_LEN)) {
-			printf("Names longer than %d characters are truncated.\n", PART_NAME_LEN);
+		if ((strlen(name1) >= PART_NAME_LEN) || (strlen(name2) >= PART_NAME_LEN)) {
+			printf("Names longer than %d characters are truncated.\n",
+			       PART_NAME_LEN - 1);
 			ret = -EINVAL;
 			goto out;
 		}
@@ -967,8 +968,9 @@ static int do_rename_gpt_parts(struct blk_desc *dev_desc, char *subcomm,
 		*first = *second;
 		*second = tmp_part;
 	} else { /* rename */
-		if (strlen(name2) > PART_NAME_LEN) {
-			printf("Names longer than %d characters are truncated.\n", PART_NAME_LEN);
+		if (strlen(name2) >= PART_NAME_LEN) {
+			printf("Names longer than %d characters are truncated.\n",
+			       PART_NAME_LEN - 1);
 			ret = -EINVAL;
 			goto out;
 		}

@@ -7,29 +7,18 @@
  * Based on dwc3-omap.c.
  */
 
-#include <cpu_func.h>
-#include <log.h>
 #include <dm.h>
-#include <dm/device-internal.h>
-#include <dm/lists.h>
-#include <dwc3-uboot.h>
-#include <generic-phy.h>
-#include <linux/bitops.h>
-#include <linux/delay.h>
-#include <linux/printk.h>
-#include <linux/usb/ch9.h>
-#include <linux/usb/gadget.h>
-#include <malloc.h>
-#include <power/regulator.h>
-#include <usb.h>
-#include "core.h"
-#include "gadget.h"
 #include <reset.h>
-#include <clk.h>
-#include <usb/xhci.h>
 #include <asm/gpio.h>
-
+#include <dm/device_compat.h>
+#include <dm/lists.h>
+#include <linux/delay.h>
+#include <linux/usb/gadget.h>
+#include <power/regulator.h>
+#include <usb/xhci.h>
+#include "core.h"
 #include "dwc3-generic.h"
+#include "gadget.h"
 
 struct dwc3_generic_plat {
 	fdt_addr_t base;
@@ -51,7 +40,8 @@ struct dwc3_generic_host_priv {
 };
 
 static int dwc3_generic_probe(struct udevice *dev,
-			      struct dwc3_generic_priv *priv)
+			      struct dwc3_generic_priv *priv,
+			      enum usb_dr_mode mode)
 {
 	int rc;
 	struct dwc3_generic_plat *plat = dev_get_plat(dev);
@@ -62,7 +52,7 @@ static int dwc3_generic_probe(struct udevice *dev,
 
 	dwc3->dev = dev;
 	dwc3->maximum_speed = plat->maximum_speed;
-	dwc3->dr_mode = plat->dr_mode;
+	dwc3->dr_mode = mode;
 #if CONFIG_IS_ENABLED(OF_CONTROL)
 	dwc3_of_parse(dwc3);
 
@@ -184,8 +174,8 @@ static int dwc3_generic_of_to_plat(struct udevice *dev)
 		node = dev_ofnode(dev->parent);
 		plat->dr_mode = usb_get_dr_mode(node);
 		if (plat->dr_mode == USB_DR_MODE_UNKNOWN) {
-			pr_err("Invalid usb mode setup\n");
-			return -ENODEV;
+			dev_info(dev, "No USB mode specified. Using 'otg'\n");
+			plat->dr_mode = USB_DR_MODE_OTG;
 		}
 	}
 
@@ -197,7 +187,7 @@ static int dwc3_generic_peripheral_probe(struct udevice *dev)
 {
 	struct dwc3_generic_priv *priv = dev_get_priv(dev);
 
-	return dwc3_generic_probe(dev, priv);
+	return dwc3_generic_probe(dev, priv, USB_DR_MODE_PERIPHERAL);
 }
 
 static int dwc3_generic_peripheral_remove(struct udevice *dev)
@@ -241,17 +231,17 @@ static int dwc3_generic_host_probe(struct udevice *dev)
 	struct dwc3_generic_host_priv *priv = dev_get_priv(dev);
 	int rc;
 
-	rc = dwc3_generic_probe(dev, &priv->gen_priv);
+	rc = dwc3_generic_probe(dev, &priv->gen_priv, USB_DR_MODE_HOST);
 	if (rc)
 		return rc;
 
 	rc = device_get_supply_regulator(dev, "vbus-supply", &priv->vbus_supply);
-	if (rc)
+	if (rc && rc != -ENOSYS)
 		debug("%s: No vbus regulator found: %d\n", dev->name, rc);
 
-	/* Only returns an error if regulator is valid and failed to enable due to a driver issue */
+	/* Does not return an error if regulator is invalid - but does so when DM_REGULATOR is disabled */
 	rc = regulator_set_enable_if_allowed(priv->vbus_supply, true);
-	if (rc)
+	if (rc && rc != -ENOSYS)
 		return rc;
 
 	hccr = (struct xhci_hccr *)priv->gen_priv.base;
@@ -471,8 +461,12 @@ static void dwc3_qcom_select_utmi_clk(void __iomem *qscratch_base)
 	setbits_le32(qscratch_base + QSCRATCH_GENERAL_CFG,
 			  PIPE_UTMI_CLK_DIS);
 
+	udelay(100);
+
 	setbits_le32(qscratch_base + QSCRATCH_GENERAL_CFG,
 			  PIPE_UTMI_CLK_SEL | PIPE3_PHYSTATUS_SW);
+
+	udelay(100);
 
 	clrbits_le32(qscratch_base + QSCRATCH_GENERAL_CFG,
 			  PIPE_UTMI_CLK_DIS);
@@ -482,7 +476,14 @@ static void dwc3_qcom_glue_configure(struct udevice *dev, int index,
 				     enum usb_dr_mode mode)
 {
 	struct dwc3_glue_data *glue = dev_get_plat(dev);
-	void __iomem *qscratch_base = map_physmem(glue->regs, 0x400, MAP_NOCACHE);
+	fdt_addr_t regs = glue->regs;
+	void __iomem *qscratch_base;
+
+	/* Offset for qscratch base when using flat DT */
+	if (device_is_compatible(dev, "qcom,snps-dwc3"))
+		regs += SDM845_QSCRATCH_BASE_OFFSET;
+
+	qscratch_base = map_physmem(regs, 0x400, MAP_NOCACHE);
 	if (IS_ERR_OR_NULL(qscratch_base)) {
 		log_err("%s: Invalid qscratch base address\n", dev->name);
 		return;
@@ -495,11 +496,8 @@ static void dwc3_qcom_glue_configure(struct udevice *dev, int index,
 		dwc3_qcom_vbus_override_enable(qscratch_base, true);
 }
 
-struct dwc3_glue_ops qcom_ops = {
-	.glue_configure = dwc3_qcom_glue_configure,
-};
-
-static int dwc3_rk_glue_get_ctrl_dev(struct udevice *dev, ofnode *node)
+/* In cases where there is no dwc3 node and it's flattened into the glue node */
+static int dwc3_flat_dt_get_ctrl_dev(struct udevice *dev, ofnode *node)
 {
 	*node = dev_ofnode(dev);
 	if (!ofnode_valid(*node))
@@ -508,8 +506,17 @@ static int dwc3_rk_glue_get_ctrl_dev(struct udevice *dev, ofnode *node)
 	return 0;
 }
 
+struct dwc3_glue_ops qcom_ops = {
+	.glue_configure = dwc3_qcom_glue_configure,
+};
+
+struct dwc3_glue_ops qcom_flat_dt_ops = {
+	.glue_configure = dwc3_qcom_glue_configure,
+	.glue_get_ctrl_dev = dwc3_flat_dt_get_ctrl_dev,
+};
+
 struct dwc3_glue_ops rk_ops = {
-	.glue_get_ctrl_dev = dwc3_rk_glue_get_ctrl_dev,
+	.glue_get_ctrl_dev = dwc3_flat_dt_get_ctrl_dev,
 };
 
 static int dwc3_glue_bind_common(struct udevice *parent, ofnode node)
@@ -526,6 +533,10 @@ static int dwc3_glue_bind_common(struct udevice *parent, ofnode node)
 	dr_mode = usb_get_dr_mode(dev_ofnode(parent));
 	if (!dr_mode)
 		dr_mode = usb_get_dr_mode(node);
+
+	/* usb mode must fallback to peripheral if not known */
+	if (dr_mode == USB_DR_MODE_UNKNOWN)
+		dr_mode = USB_DR_MODE_OTG;
 
 	if (CONFIG_IS_ENABLED(DM_USB_GADGET) &&
 	    (dr_mode == USB_DR_MODE_PERIPHERAL || dr_mode == USB_DR_MODE_OTG)) {
@@ -709,12 +720,17 @@ static const struct udevice_id dwc3_glue_ids[] = {
 	{ .compatible = "ti,am654-dwc3" },
 	{ .compatible = "rockchip,rk3328-dwc3", .data = (ulong)&rk_ops },
 	{ .compatible = "rockchip,rk3399-dwc3" },
+	{ .compatible = "rockchip,rk3528-dwc3", .data = (ulong)&rk_ops },
 	{ .compatible = "rockchip,rk3568-dwc3", .data = (ulong)&rk_ops },
+	{ .compatible = "rockchip,rk3576-dwc3", .data = (ulong)&rk_ops },
 	{ .compatible = "rockchip,rk3588-dwc3", .data = (ulong)&rk_ops },
 	{ .compatible = "qcom,dwc3", .data = (ulong)&qcom_ops },
+	{ .compatible = "qcom,snps-dwc3", .data = (ulong)&qcom_flat_dt_ops },
 	{ .compatible = "fsl,imx8mp-dwc3", .data = (ulong)&imx8mp_ops },
 	{ .compatible = "fsl,imx8mq-dwc3" },
 	{ .compatible = "intel,tangier-dwc3" },
+	{ .compatible = "samsung,exynos7870-dwusb3" },
+	{ .compatible = "samsung,exynos850-dwusb3" },
 	{ }
 };
 

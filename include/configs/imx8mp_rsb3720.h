@@ -23,7 +23,7 @@
 	EFI_GUID(0xb5fb6f08, 0xe142, 0x4db1, 0x97, 0xea, \
 		 0x5f, 0xd3, 0x6b, 0x9b, 0xe5, 0xb9)
 
-#ifdef CONFIG_SPL_BUILD
+#ifdef CONFIG_XPL_BUILD
 #define CFG_MALLOC_F_ADDR		0x184000 /* malloc f used before \
 						  * GD_FLG_FULL_MALLOC_INIT \
 						  * set \
@@ -77,7 +77,7 @@
 	"fdtfile=" CONFIG_DEFAULT_FDT_FILE "\0" \
 	"initrd_addr=0x43800000\0"		\
 	"bootm_size=0x10000000\0" \
-	"mmcdev=" __stringify(CONFIG_SYS_MMC_ENV_DEV) "\0" \
+	"mmcdev=" __stringify(CONFIG_ENV_MMC_DEVICE_INDEX) "\0" \
 	"mmcpart=1\0" \
 	"mmcroot=/dev/mmcblk1p2 rootwait rw\0" \
 	"mmcautodetect=yes\0" \

@@ -85,7 +85,8 @@ struct bd_info;
 #define is_imx93() (is_cpu_type(MXC_CPU_IMX93) || is_cpu_type(MXC_CPU_IMX9331) || \
 	is_cpu_type(MXC_CPU_IMX9332) || is_cpu_type(MXC_CPU_IMX9351) || \
 	is_cpu_type(MXC_CPU_IMX9322) || is_cpu_type(MXC_CPU_IMX9321) || \
-	is_cpu_type(MXC_CPU_IMX9312) || is_cpu_type(MXC_CPU_IMX9311))
+	is_cpu_type(MXC_CPU_IMX9312) || is_cpu_type(MXC_CPU_IMX9311) || \
+	is_cpu_type(MXC_CPU_IMX9302) || is_cpu_type(MXC_CPU_IMX9301))
 #define is_imx9351() (is_cpu_type(MXC_CPU_IMX9351))
 #define is_imx9332() (is_cpu_type(MXC_CPU_IMX9332))
 #define is_imx9331() (is_cpu_type(MXC_CPU_IMX9331))
@@ -93,6 +94,17 @@ struct bd_info;
 #define is_imx9321() (is_cpu_type(MXC_CPU_IMX9321))
 #define is_imx9312() (is_cpu_type(MXC_CPU_IMX9312))
 #define is_imx9311() (is_cpu_type(MXC_CPU_IMX9311))
+#define is_imx9302() (is_cpu_type(MXC_CPU_IMX9302))
+#define is_imx9301() (is_cpu_type(MXC_CPU_IMX9301))
+
+#define is_imx94() (is_cpu_type(MXC_CPU_IMX94))
+#define is_imx95() (is_cpu_type(MXC_CPU_IMX95))
+
+#define is_imx9121() (is_cpu_type(MXC_CPU_IMX9121))
+#define is_imx9111() (is_cpu_type(MXC_CPU_IMX9111))
+#define is_imx9101() (is_cpu_type(MXC_CPU_IMX9101))
+#define is_imx91() (is_cpu_type(MXC_CPU_IMX91) || is_cpu_type(MXC_CPU_IMX9111) || \
+	is_cpu_type(MXC_CPU_IMX9101) || is_cpu_type(MXC_CPU_IMX9121))
 
 #define is_imxrt1020() (is_cpu_type(MXC_CPU_IMXRT1020))
 #define is_imxrt1050() (is_cpu_type(MXC_CPU_IMXRT1050))
@@ -207,6 +219,43 @@ ulong spl_romapi_get_uboot_base(u32 image_offset, u32 rom_bt_dev);
 u32 rom_api_download_image(u8 *dest, u32 offset, u32 size);
 u32 rom_api_query_boot_infor(u32 info_type, u32 *info);
 
+#if IS_ENABLED(CONFIG_SCMI_FIRMWARE)
+typedef struct rom_passover {
+	u16 tag;                   // Tag
+	u8  len;                   // Fixed value of 0x80
+	u8  ver;                   // Version
+	u32 boot_mode;             // Boot mode
+	u32 card_addr_mode;        // SD card address mode
+	u32 bad_blks_of_img_set0;  // NAND bad block count skipped 1
+	u32 ap_mu_id;              // AP MU ID
+	u32 bad_blks_of_img_set1;  // NAND bad block count skipped 1
+	u8  boot_stage;            // Boot stage
+	u8  img_set_sel;           // Image set booted from
+	u8  rsv0[2];               // Reserved
+	u32 img_set_end;           // Offset of Image End
+	u32 rom_version;           // ROM version
+	u8  boot_dev_state;        // Boot device state
+	u8  boot_dev_inst;         // Boot device type
+	u8  boot_dev_type;         // Boot device instance
+	u8  rsv1;                  // Reserved
+	u32 dev_page_size;         // Boot device page size
+	u32 cnt_header_ofs;        // Container header offset
+	u32 img_ofs;               // Image offset
+}  __packed rom_passover_t;
+
+/**
+ * struct scmi_rom_passover_out - Response payload for ROM_PASSOVER_GET command
+ * @status:	SCMI clock ID
+ * @attributes:	Attributes of the targets clock state
+ */
+struct scmi_rom_passover_get_out {
+	u32 status;
+	u32 numPassover;
+	u32 passover[(sizeof(rom_passover_t) + 8) / 4];
+};
+
+#endif
+
 /* For i.MX ULP */
 #define BT0CFG_LPBOOT_MASK	0x1
 #define BT0CFG_DUALBOOT_MASK	0x2
@@ -275,4 +324,7 @@ void enable_ca7_smp(void);
 
 enum boot_device get_boot_device(void);
 
+int disable_cpu_nodes(void *blob, const char * const *nodes_path,
+		      u32 num_disabled_cores, u32 max_cores);
+int fixup_thermal_trips(void *blob, const char *name);
 #endif

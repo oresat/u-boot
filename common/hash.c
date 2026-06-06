@@ -34,6 +34,7 @@
 #include <u-boot/sha256.h>
 #include <u-boot/sha512.h>
 #include <u-boot/md5.h>
+#include <u-boot/sm3.h>
 
 static int __maybe_unused hash_init_sha1(struct hash_algo *algo, void **ctxp)
 {
@@ -143,7 +144,36 @@ static int __maybe_unused hash_finish_sha512(struct hash_algo *algo, void *ctx,
 	return 0;
 }
 
-static int hash_init_crc16_ccitt(struct hash_algo *algo, void **ctxp)
+static int __maybe_unused hash_init_sm3(struct hash_algo *algo, void **ctxp)
+{
+	struct sm3_context *ctx = malloc(sizeof(struct sm3_context));
+
+	sm3_init(ctx);
+	*ctxp = ctx;
+	return 0;
+}
+
+static int __maybe_unused hash_update_sm3(struct hash_algo *algo, void *ctx,
+					  const void *buf, uint size,
+					  int is_last)
+{
+	sm3_update((struct sm3_context *)ctx, buf, size);
+	return 0;
+}
+
+static int __maybe_unused hash_finish_sm3(struct hash_algo *algo, void *ctx,
+					  void *dest_buf, int size)
+{
+	if (size < algo->digest_size)
+		return -1;
+
+	sm3_final((struct sm3_context *)ctx, dest_buf);
+	free(ctx);
+	return 0;
+}
+
+static int __maybe_unused hash_init_crc16_ccitt(struct hash_algo *algo,
+						void **ctxp)
 {
 	uint16_t *ctx = malloc(sizeof(uint16_t));
 	*ctx = 0;
@@ -151,16 +181,18 @@ static int hash_init_crc16_ccitt(struct hash_algo *algo, void **ctxp)
 	return 0;
 }
 
-static int hash_update_crc16_ccitt(struct hash_algo *algo, void *ctx,
-				   const void *buf, unsigned int size,
-				   int is_last)
+static int __maybe_unused hash_update_crc16_ccitt(struct hash_algo *algo,
+						  void *ctx, const void *buf,
+						  unsigned int size,
+						  int is_last)
 {
 	*((uint16_t *)ctx) = crc16_ccitt(*((uint16_t *)ctx), buf, size);
 	return 0;
 }
 
-static int hash_finish_crc16_ccitt(struct hash_algo *algo, void *ctx,
-				   void *dest_buf, int size)
+static int __maybe_unused hash_finish_crc16_ccitt(struct hash_algo *algo,
+						  void *ctx, void *dest_buf,
+						  int size)
 {
 	if (size < algo->digest_size)
 		return -1;
@@ -295,6 +327,18 @@ static struct hash_algo hash_algo[] = {
 #endif
 	},
 #endif
+#if CONFIG_IS_ENABLED(SM3)
+	{
+		.name		= "sm3_256",
+		.digest_size	= SM3_DIGEST_SIZE,
+		.chunk_size	= SM3_BLOCK_SIZE,
+		.hash_func_ws	= sm3_csum_wd,
+		.hash_init	= hash_init_sm3,
+		.hash_update	= hash_update_sm3,
+		.hash_finish	= hash_finish_sm3,
+	},
+#endif
+#if CONFIG_IS_ENABLED(CRC16)
 	{
 		.name		= "crc16-ccitt",
 		.digest_size	= 2,
@@ -304,6 +348,15 @@ static struct hash_algo hash_algo[] = {
 		.hash_update	= hash_update_crc16_ccitt,
 		.hash_finish	= hash_finish_crc16_ccitt,
 	},
+#endif
+#if CONFIG_IS_ENABLED(CRC8) && IS_ENABLED(CONFIG_HASH_CRC8)
+	{
+		.name		= "crc8",
+		.digest_size	= 1,
+		.chunk_size	= CHUNKSZ_CRC32,
+		.hash_func_ws	= crc8_wd_buf,
+	},
+#endif
 #if CONFIG_IS_ENABLED(CRC32)
 	{
 		.name		= "crc32",
@@ -321,7 +374,7 @@ static struct hash_algo hash_algo[] = {
 #if CONFIG_IS_ENABLED(SHA256) || IS_ENABLED(CONFIG_CMD_SHA1SUM) || \
 	CONFIG_IS_ENABLED(CRC32_VERIFY) || IS_ENABLED(CONFIG_CMD_HASH) || \
 	CONFIG_IS_ENABLED(SHA384) || CONFIG_IS_ENABLED(SHA512) || \
-	IS_ENABLED(CONFIG_CMD_MD5SUM)
+	IS_ENABLED(CONFIG_CMD_MD5SUM) || CONFIG_IS_ENABLED(SM3)
 #define multi_hash()	1
 #else
 #define multi_hash()	0
@@ -403,7 +456,7 @@ int hash_block(const char *algo_name, const void *data, unsigned int len,
 	return 0;
 }
 
-#if !defined(CONFIG_SPL_BUILD) && (defined(CONFIG_CMD_HASH) || \
+#if !defined(CONFIG_XPL_BUILD) && (defined(CONFIG_CMD_HASH) || \
 	defined(CONFIG_CMD_SHA1SUM) || defined(CONFIG_CMD_CRC32)) || \
 	defined(CONFIG_CMD_MD5SUM)
 /**

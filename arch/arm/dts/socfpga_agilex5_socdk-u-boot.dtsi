@@ -3,6 +3,7 @@
  * U-Boot additions
  *
  * Copyright (C) 2024 Intel Corporation <www.intel.com>
+ * Copyright (C) 2025 Altera Corporation <www.altera.com>
  */
 
 #include "socfpga_agilex5-u-boot.dtsi"
@@ -21,15 +22,52 @@
 		};
 	};
 
-	memory {
-		/* 8GB */
-		reg = <0 0x80000000 0 0x80000000>,
-		      <8 0x80000000 1 0x80000000>;
-	};
+	/*
+	 * Both Memory base address and size default info is retrieved from HW setting.
+	 * Reconfiguration / Overwrite these info can be done with examples below.
+	 *
+	 * When LPDDR ECC is enabled, the last 1/8 of the memory region must
+	 * be reserved for the Inline ECC buffer.
+	 *
+	 * Example for memory size with 2GB:
+	 * memory {
+	 *	reg = <0x0 0x80000000 0x0 0x80000000>;
+	 * };
+	 *
+	 * Example for memory size with 8GB:
+	 * memory {
+	 *	reg = <0x0 0x80000000 0x0 0x80000000>,
+	 *	      <0x8 0x80000000 0x1 0x80000000>;
+	 * };
+	 *
+	 * Example for memory size with 32GB:
+	 * memory {
+	 *	reg = <0x0 0x80000000 0x0 0x80000000>,
+	 *	      <0x8 0x80000000 0x7 0x80000000>;
+	 * };
+	 *
+	 * Example for memory size with 512GB:
+	 * memory {
+	 *	reg = <0x0 0x80000000 0x0 0x80000000>,
+	 *	      <0x8 0x80000000 0x7 0x80000000>,
+	 *	      <0x88 0x00000000 0x78 0x00000000>;
+	 * };
+	 *
+	 * Example for memory size with 2GB with LPDDR Inline ECC ON:
+	 * memory {
+	 *	reg = <0x0 0x80000000 0x0 0x70000000>;
+	 * };
+	 *
+	 * Example for memory size with 8GB with LPDDR Inline ECC ON:
+	 * memory {
+	 *	reg = <0x0 0x80000000 0x0 0x80000000>,
+	 *	      <0x8 0x80000000 0x1 0x40000000>;
+	 * };
+	 */
 
 	chosen {
 		stdout-path = "serial0:115200n8";
-		u-boot,spl-boot-order = &mmc,&flash0,"/memory";
+		u-boot,spl-boot-order = &mmc,&flash0,&nand,"/memory";
 	};
 };
 
@@ -41,6 +79,10 @@
 	/delete-property/ cdns,read-delay;
 };
 
+&flash1 {
+	bootph-all;
+};
+
 &i3c0 {
 	bootph-all;
 };
@@ -49,57 +91,54 @@
 	bootph-all;
 };
 
-&mmc {
-	status = "okay";
-	bus-width = <4>;
-	sd-uhs-sdr50;
-	cap-mmc-highspeed;
+&gpio1 {
+	portb: gpio-controller@0 {
+		bootph-all;
+	};
+};
+
+&sd_emmc_power {
 	bootph-all;
 };
 
-&combophy0 {
-	status = "okay";
+&sd_io_1v8_reg {
+	gpios = <&portb 3 GPIO_ACTIVE_HIGH>;
 	bootph-all;
-	cdns,phy-use-ext-lpbk-dqs = <1>;
-	cdns,phy-use-lpbk-dqs = <1>;
-	cdns,phy-use-phony-dqs = <1>;
-	cdns,phy-use-phony-dqs-cmd = <1>;
-	cdns,phy-io-mask-always-on = <0>;
-	cdns,phy-io-mask-end = <5>;
-	cdns,phy-io-mask-start = <0>;
-	cdns,phy-data-select-oe-end = <1>;
-	cdns,phy-sync-method = <1>;
-	cdns,phy-sw-half-cycle-shift = <0>;
-	cdns,phy-rd-del-sel = <52>;
-	cdns,phy-underrun-suppress = <1>;
-	cdns,phy-gate-cfg-always-on = <1>;
-	cdns,phy-param-dll-bypass-mode = <1>;
-	cdns,phy-param-phase-detect-sel = <2>;
-	cdns,phy-param-dll-start-point = <254>;
-	cdns,phy-read-dqs-cmd-delay = <0>;
-	cdns,phy-clk-wrdqs-delay = <0>;
-	cdns,phy-clk-wr-delay = <0>;
-	cdns,phy-read-dqs-delay = <0>;
-	cdns,phy-phony-dqs-timing = <0>;
-	cdns,hrs09-rddata-en = <1>;
-	cdns,hrs09-rdcmd-en = <1>;
-	cdns,hrs09-extended-wr-mode = <1>;
-	cdns,hrs09-extended-rd-mode = <1>;
-	cdns,hrs10-hcsdclkadj = <3>;
-	cdns,hrs16-wrdata1-sdclk-dly = <0>;
-	cdns,hrs16-wrdata0-sdclk-dly = <0>;
-	cdns,hrs16-wrcmd1-sdclk-dly = <0>;
-	cdns,hrs16-wrcmd0-sdclk-dly = <0>;
-	cdns,hrs16-wrdata1-dly = <0>;
-	cdns,hrs16-wrdata0-dly = <0>;
-	cdns,hrs16-wrcmd1-dly = <0>;
-	cdns,hrs16-wrcmd0-dly = <0>;
-	cdns,hrs07-rw-compensate = <10>;
-	cdns,hrs07-idelay-val = <0>;
+};
+
+&mmc {
+	status = "okay";
+
+	no-mmc;
+	no-1-8-v;
+	disable-wp;
+	cap-sd-highspeed;
+	vmmc-supply = <&sd_emmc_power>;
+	vqmmc-supply = <&sd_io_1v8_reg>;
+	max-frequency = <200000000>;
+
+	/* SD card default speed (DS) and UHS-I SDR12 mode timing configuration */
+	cdns,phy-dqs-timing-delay-sd-ds = <0x00780000>;
+	cdns,phy-gate-lpbk_ctrl-delay-sd-ds = <0x81a40040>;
+	cdns,phy-dll-slave-ctrl-sd-ds = <0x00a000fe>;
+	cdns,phy-dq-timing-delay-sd-ds = <0x28000001>;
+
+	/* SD card high speed and UHS-I SDR25 mode timing configuration */
+	cdns,phy-dqs-timing-delay-sd-hs = <0x780001>;
+	cdns,phy-gate-lpbk_ctrl-delay-sd-hs = <0x81a40040>;
+	cdns,phy-dq-timing-delay-sd-hs = <0x10000001>;
+	cdns,ctrl-hrs16-slave-ctrl-sd-hs = <0x101>;
+	cdns,ctrl-hrs07-timing-delay-sd-hs = <0xA0001>;
+
+	bootph-all;
 };
 
 &qspi {
 	status = "okay";
+};
+
+&nand {
+	bootph-all;
 };
 
 &timer0 {
@@ -122,3 +161,36 @@
 	bootph-all;
 };
 
+&gmac0 {
+	status = "okay";
+	phy-mode = "rgmii";
+	phy-handle = <&emac0_phy0>;
+
+	max-frame-size = <9000>;
+
+	mdio0 {
+		#address-cells = <1>;
+		#size-cells = <0>;
+		compatible = "snps,dwxgmac-mdio";
+		emac0_phy0: ethernet-phy@0 {
+			reg = <0>;
+		};
+	};
+};
+
+&gmac2 {
+	status = "okay";
+	phy-mode = "rgmii";
+	phy-handle = <&emac2_phy0>;
+
+	max-frame-size = <9000>;
+
+	mdio0 {
+		#address-cells = <1>;
+		#size-cells = <0>;
+		compatible = "snps,dwxgmac-mdio";
+		emac2_phy0: ethernet-phy@0 {
+			reg = <0>;
+		};
+	};
+};

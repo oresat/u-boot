@@ -16,7 +16,6 @@
 	"script=boot.scr\0" \
 	"image=zImage\0" \
 	"console=ttymxc0\0" \
-	"fdt_high=0xffffffff\0" \
 	"initrd_high=0xffffffff\0" \
 	"fdt_file=imx6sx-sabreauto.dtb\0" \
 	"fdt_addr=0x88000000\0" \
@@ -94,11 +93,6 @@
 
 #define IMX_FEC_BASE			ENET2_BASE_ADDR
 #define CFG_FEC_MXC_PHYADDR          0x0
-
-#ifdef CONFIG_CMD_USB
-#define CFG_MXC_USB_PORTSC  (PORT_PTS_UTMI | PORT_PTS_PTW)
-#define CFG_MXC_USB_FLAGS   0
-#endif
 
 #define CFG_SYS_FSL_USDHC_NUM	2
 

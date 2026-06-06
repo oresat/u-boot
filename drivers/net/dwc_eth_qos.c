@@ -32,6 +32,7 @@
 #include <clk.h>
 #include <cpu_func.h>
 #include <dm.h>
+#include <dm/device_compat.h>
 #include <errno.h>
 #include <eth_phy.h>
 #include <log.h>
@@ -46,10 +47,6 @@
 #include <asm/cache.h>
 #include <asm/gpio.h>
 #include <asm/io.h>
-#ifdef CONFIG_ARCH_IMX8M
-#include <asm/arch/clock.h>
-#include <asm/mach-imx/sys_proto.h>
-#endif
 #include <linux/bitfield.h>
 #include <linux/delay.h>
 #include <linux/printk.h>
@@ -686,7 +683,6 @@ static int eqos_start(struct udevice *dev)
 	int ret, i;
 	ulong rate;
 	u32 val, tx_fifo_sz, rx_fifo_sz, tqs, rqs, pbl;
-	ulong last_rx_desc;
 	ulong desc_pad;
 	ulong addr64;
 
@@ -710,6 +706,9 @@ static int eqos_start(struct udevice *dev)
 	 * e.g. i.MX8M Plus GPR[1] content, which selects interface mode.
 	 */
 	setbits_le32(&eqos->dma_regs->mode, EQOS_DMA_MODE_SWR);
+
+	if (eqos->config->ops->eqos_fix_soc_reset)
+		eqos->config->ops->eqos_fix_soc_reset(dev);
 
 	ret = wait_for_bit_le32(&eqos->dma_regs->mode,
 				EQOS_DMA_MODE_SWR, false,
@@ -891,11 +890,11 @@ static int eqos_start(struct udevice *dev)
 			EQOS_MAC_RXQ_CTRL0_RXQ0EN_SHIFT);
 
 	/* Multicast and Broadcast Queue Enable */
-	setbits_le32(&eqos->mac_regs->unused_0a4,
-		     0x00100000);
-	/* enable promise mode */
-	setbits_le32(&eqos->mac_regs->unused_004[1],
-		     0x1);
+	setbits_le32(&eqos->mac_regs->rxq_ctrl1,
+		     EQOS_MAC_RXQ_CTRL1_MCBCQEN);
+	/* Promiscuous Mode Enable */
+	setbits_le32(&eqos->mac_regs->packet_filter,
+		     EQOS_MAC_PACKET_FILTER_PR);
 
 	/* Set TX flow control parameters */
 	/* Set Pause Time */
@@ -1004,6 +1003,21 @@ static int eqos_start(struct udevice *dev)
 	writel(EQOS_DESCRIPTORS_RX - 1,
 	       &eqos->dma_regs->ch0_rxdesc_ring_length);
 
+	/*
+	 * Point TX tail pointer at the first descriptor, implying no descriptor
+	 * are owned by the DMA. We advance the tail pointer when we need to TX
+	 * a packet in eqos_send().
+	 */
+	addr64 = (ulong)eqos_get_desc(eqos, 0, false);
+	writel(lower_32_bits(addr64), &eqos->dma_regs->ch0_txdesc_tail_pointer);
+
+	/*
+	 * Point RX tail pointer at the last descriptor, implying all
+	 * descriptors are owned by the DMA.
+	 */
+	addr64 = (ulong)eqos_get_desc(eqos, EQOS_DESCRIPTORS_RX - 1, true);
+	writel(lower_32_bits(addr64), &eqos->dma_regs->ch0_rxdesc_tail_pointer);
+
 	/* Enable everything */
 	setbits_le32(&eqos->dma_regs->ch0_tx_control,
 		     EQOS_DMA_CH0_TX_CONTROL_ST);
@@ -1011,16 +1025,6 @@ static int eqos_start(struct udevice *dev)
 		     EQOS_DMA_CH0_RX_CONTROL_SR);
 	setbits_le32(&eqos->mac_regs->configuration,
 		     EQOS_MAC_CONFIGURATION_TE | EQOS_MAC_CONFIGURATION_RE);
-
-	/* TX tail pointer not written until we need to TX a packet */
-	/*
-	 * Point RX tail pointer at last descriptor. Ideally, we'd point at the
-	 * first descriptor, implying all descriptors were available. However,
-	 * that's not distinguishable from none of the descriptors being
-	 * available.
-	 */
-	last_rx_desc = (ulong)eqos_get_desc(eqos, EQOS_DESCRIPTORS_RX - 1, true);
-	writel(last_rx_desc, &eqos->dma_regs->ch0_rxdesc_tail_pointer);
 
 	eqos->started = true;
 
@@ -1116,8 +1120,8 @@ static int eqos_send(struct udevice *dev, void *packet, int length)
 	tx_desc->des3 = EQOS_DESC3_OWN | EQOS_DESC3_FD | EQOS_DESC3_LD | length;
 	eqos->config->ops->eqos_flush_desc(tx_desc);
 
-	writel((ulong)eqos_get_desc(eqos, eqos->tx_desc_idx, false),
-		&eqos->dma_regs->ch0_txdesc_tail_pointer);
+	writel(lower_32_bits((ulong)eqos_get_desc(eqos, eqos->tx_desc_idx, false)),
+	       &eqos->dma_regs->ch0_txdesc_tail_pointer);
 
 	for (i = 0; i < 1000000; i++) {
 		eqos->config->ops->eqos_inval_desc(tx_desc);
@@ -1173,7 +1177,7 @@ static int eqos_free_pkt(struct udevice *dev, uchar *packet, int length)
 
 	eqos->config->ops->eqos_inval_buffer(packet, length);
 
-	if ((eqos->rx_desc_idx & idx_mask) == idx_mask) {
+	if (eqos->started && (eqos->rx_desc_idx & idx_mask) == idx_mask) {
 		for (idx = eqos->rx_desc_idx - idx_mask;
 		     idx <= eqos->rx_desc_idx;
 		     idx++) {
@@ -1198,7 +1202,8 @@ static int eqos_free_pkt(struct udevice *dev, uchar *packet, int length)
 			rx_desc->des3 = EQOS_DESC3_OWN | EQOS_DESC3_BUF1V;
 			eqos->config->ops->eqos_flush_desc(rx_desc);
 		}
-		writel((ulong)rx_desc, &eqos->dma_regs->ch0_rxdesc_tail_pointer);
+		writel(lower_32_bits((ulong)rx_desc),
+		       &eqos->dma_regs->ch0_rxdesc_tail_pointer);
 	}
 
 	eqos->rx_desc_idx++;
@@ -1301,6 +1306,13 @@ static int eqos_probe_resources_tegra186(struct udevice *dev)
 
 	debug("%s(dev=%p):\n", __func__, dev);
 
+	ret = eqos_get_base_addr_dt(dev);
+	if (ret) {
+		pr_err("eqos_get_base_addr_dt failed: %d\n", ret);
+		return ret;
+	}
+	eqos->tegra186_regs = (void *)(eqos->regs + EQOS_TEGRA186_REGS_BASE);
+
 	ret = reset_get_by_name(dev, "eqos", &eqos->reset_ctl);
 	if (ret) {
 		pr_err("reset_get_by_name(rst) failed: %d\n", ret);
@@ -1375,6 +1387,69 @@ static int eqos_remove_resources_tegra186(struct udevice *dev)
 	return 0;
 }
 
+static int eqos_bind(struct udevice *dev)
+{
+	static int dev_num;
+	const size_t name_sz = 16;
+	char name[name_sz];
+
+	/* Device name defaults to DT node name. */
+	if (ofnode_valid(dev_ofnode(dev)))
+		return 0;
+
+	/* Assign unique names in case there is no DT node. */
+	snprintf(name, name_sz, "eth_eqos#%d", dev_num++);
+	return device_set_name(dev, name);
+}
+
+/*
+ * Get driver data based on the device tree. Boards not using a device tree can
+ * overwrite this function.
+ */
+__weak void *eqos_get_driver_data(struct udevice *dev)
+{
+	return (void *)dev_get_driver_data(dev);
+}
+
+static fdt_addr_t eqos_get_base_addr_common(struct udevice *dev, fdt_addr_t addr)
+{
+	struct eqos_priv *eqos = dev_get_priv(dev);
+
+	if (addr == FDT_ADDR_T_NONE) {
+#if CONFIG_IS_ENABLED(FDT_64BIT)
+		dev_err(dev, "addr=0x%llx is invalid.\n", addr);
+#else
+		dev_err(dev, "addr=0x%x is invalid.\n", addr);
+#endif
+		return -EINVAL;
+	}
+
+	eqos->regs = addr;
+	eqos->mac_regs = (void *)(addr + EQOS_MAC_REGS_BASE);
+	eqos->mtl_regs = (void *)(addr + EQOS_MTL_REGS_BASE);
+	eqos->dma_regs = (void *)(addr + EQOS_DMA_REGS_BASE);
+
+	return 0;
+}
+
+int eqos_get_base_addr_dt(struct udevice *dev)
+{
+	fdt_addr_t addr = dev_read_addr(dev);
+	return eqos_get_base_addr_common(dev, addr);
+}
+
+int eqos_get_base_addr_pci(struct udevice *dev)
+{
+	fdt_addr_t addr;
+	void *paddr;
+
+	paddr = dm_pci_map_bar(dev, PCI_BASE_ADDRESS_0, 0, 0, PCI_REGION_TYPE,
+							      PCI_REGION_MEM);
+	addr = paddr ? (fdt_addr_t)paddr : FDT_ADDR_T_NONE;
+
+	return eqos_get_base_addr_common(dev, addr);
+}
+
 static int eqos_probe(struct udevice *dev)
 {
 	struct eqos_priv *eqos = dev_get_priv(dev);
@@ -1383,17 +1458,12 @@ static int eqos_probe(struct udevice *dev)
 	debug("%s(dev=%p):\n", __func__, dev);
 
 	eqos->dev = dev;
-	eqos->config = (void *)dev_get_driver_data(dev);
 
-	eqos->regs = dev_read_addr(dev);
-	if (eqos->regs == FDT_ADDR_T_NONE) {
-		pr_err("dev_read_addr() failed\n");
+	eqos->config = eqos_get_driver_data(dev);
+	if (!eqos->config) {
+		pr_err("Failed to get driver data.\n");
 		return -ENODEV;
 	}
-	eqos->mac_regs = (void *)(eqos->regs + EQOS_MAC_REGS_BASE);
-	eqos->mtl_regs = (void *)(eqos->regs + EQOS_MTL_REGS_BASE);
-	eqos->dma_regs = (void *)(eqos->regs + EQOS_DMA_REGS_BASE);
-	eqos->tegra186_regs = (void *)(eqos->regs + EQOS_TEGRA186_REGS_BASE);
 
 	eqos->max_speed = dev_read_u32_default(dev, "max-speed", 0);
 
@@ -1534,6 +1604,10 @@ static const struct udevice_id eqos_ids[] = {
 		.compatible = "st,stm32mp1-dwmac",
 		.data = (ulong)&eqos_stm32mp15_config
 	},
+	{
+		.compatible = "st,stm32mp25-dwmac",
+		.data = (ulong)&eqos_stm32mp25_config
+	},
 #endif
 #if IS_ENABLED(CONFIG_DWC_ETH_QOS_IMX)
 	{
@@ -1547,7 +1621,15 @@ static const struct udevice_id eqos_ids[] = {
 #endif
 #if IS_ENABLED(CONFIG_DWC_ETH_QOS_ROCKCHIP)
 	{
+		.compatible = "rockchip,rk3528-gmac",
+		.data = (ulong)&eqos_rockchip_config
+	},
+	{
 		.compatible = "rockchip,rk3568-gmac",
+		.data = (ulong)&eqos_rockchip_config
+	},
+	{
+		.compatible = "rockchip,rk3576-gmac",
 		.data = (ulong)&eqos_rockchip_config
 	},
 	{
@@ -1567,6 +1649,12 @@ static const struct udevice_id eqos_ids[] = {
 		.data = (ulong)&eqos_jh7110_config
 	},
 #endif
+#if IS_ENABLED(CONFIG_DWC_ETH_QOS_ADI)
+	{
+		.compatible = "adi,sc59x-dwmac-eqos",
+		.data = (ulong)&eqos_adi_config
+	},
+#endif
 	{ }
 };
 
@@ -1574,6 +1662,7 @@ U_BOOT_DRIVER(eth_eqos) = {
 	.name = "eth_eqos",
 	.id = UCLASS_ETH,
 	.of_match = of_match_ptr(eqos_ids),
+	.bind	= eqos_bind,
 	.probe = eqos_probe,
 	.remove = eqos_remove,
 	.ops = &eqos_ops,

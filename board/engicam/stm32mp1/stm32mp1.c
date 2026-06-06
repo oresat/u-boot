@@ -34,15 +34,6 @@ int checkboard(void)
 	return 0;
 }
 
-/* board dependent setup after realloc */
-int board_init(void)
-{
-	if (IS_ENABLED(CONFIG_DM_REGULATOR))
-		regulators_enable_boot_on(_DEBUG);
-
-	return 0;
-}
-
 int board_late_init(void)
 {
 	return 0;

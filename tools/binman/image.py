@@ -183,6 +183,8 @@ class Image(section.Entry_section):
         fname = tools.get_output_filename(self._filename)
         tout.info("Writing image to '%s'" % fname)
         with open(fname, 'wb') as fd:
+            # For final image, don't write absent blobs to file
+            self.drop_absent_optional()
             data = self.GetPaddedData()
             fd.write(data)
         tout.info("Wrote %#x bytes" % len(data))
@@ -381,11 +383,10 @@ class Image(section.Entry_section):
             selected_entries.append(entry)
         return selected_entries, lines, widths
 
-    def LookupImageSymbol(self, sym_name, optional, msg, base_addr):
-        """Look up a symbol in an ELF file
+    def GetImageSymbolValue(self, sym_name, optional, msg, base_addr):
+        """Get the value of a Binman symbol
 
-        Looks up a symbol in an ELF file. Only entry types which come from an
-        ELF image can be used by this function.
+        Look up a Binman symbol and obtain its value.
 
         This searches through this image including all of its subsections.
 
@@ -405,12 +406,10 @@ class Image(section.Entry_section):
             optional: True if the symbol is optional. If False this function
                 will raise if the symbol is not found
             msg: Message to display if an error occurs
-            base_addr: Base address of image. This is added to the returned
-                image_pos in most cases so that the returned position indicates
-                where the targeted entry/binary has actually been loaded. But
-                if end-at-4gb is used, this is not done, since the binary is
-                already assumed to be linked to the ROM position and using
-                execute-in-place (XIP).
+            base_addr (int): Base address of image. This is added to the
+                returned value of image-pos so that the returned position
+                indicates where the targeted entry/binary has actually been
+                loaded
 
         Returns:
             Value that should be assigned to that symbol, or None if it was
@@ -423,8 +422,8 @@ class Image(section.Entry_section):
         entries = OrderedDict()
         entries_by_name = {}
         self._CollectEntries(entries, entries_by_name, self)
-        return self.LookupSymbol(sym_name, optional, msg, base_addr,
-                                 entries_by_name)
+        return self.GetSymbolValue(sym_name, optional, msg, base_addr,
+                                   entries_by_name)
 
     def CollectBintools(self):
         """Collect all the bintools used by this image

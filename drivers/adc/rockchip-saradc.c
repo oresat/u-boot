@@ -241,7 +241,7 @@ int rockchip_saradc_probe(struct udevice *dev)
 {
 	struct adc_uclass_plat *uc_pdata = dev_get_uclass_plat(dev);
 	struct rockchip_saradc_priv *priv = dev_get_priv(dev);
-	struct udevice *vref;
+	struct udevice *vref = NULL;
 	struct clk clk;
 	int vref_uv;
 	int ret;
@@ -259,7 +259,7 @@ int rockchip_saradc_probe(struct udevice *dev)
 	priv->active_channel = -1;
 
 	ret = device_get_supply_regulator(dev, "vref-supply", &vref);
-	if (ret) {
+	if (ret && uc_pdata->vdd_microvolts <= 0) {
 		printf("can't get vref-supply: %d\n", ret);
 		return ret;
 	}
@@ -267,7 +267,10 @@ int rockchip_saradc_probe(struct udevice *dev)
 	if (priv->reset)
 		rockchip_saradc_reset_controller(priv->reset);
 
-	vref_uv = regulator_get_value(vref);
+	if (vref)
+		vref_uv = regulator_get_value(vref);
+	else
+		vref_uv = uc_pdata->vdd_microvolts;
 	if (vref_uv < 0) {
 		printf("can't get vref-supply value: %d\n", vref_uv);
 		return vref_uv;
@@ -336,6 +339,14 @@ static const struct rockchip_saradc_data rk3399_saradc_data = {
 	.stop = rockchip_saradc_stop_v1,
 };
 
+static const struct rockchip_saradc_data rk3528_saradc_data = {
+	.num_bits = 10,
+	.num_channels = 4,
+	.clk_rate = 1000000,
+	.channel_data = rockchip_saradc_channel_data_v2,
+	.start_channel = rockchip_saradc_start_channel_v2,
+};
+
 static const struct rockchip_saradc_data rk3588_saradc_data = {
 	.num_bits = 12,
 	.num_channels = 8,
@@ -351,6 +362,8 @@ static const struct udevice_id rockchip_saradc_ids[] = {
 	  .data = (ulong)&rk3066_tsadc_data },
 	{ .compatible = "rockchip,rk3399-saradc",
 	  .data = (ulong)&rk3399_saradc_data },
+	{ .compatible = "rockchip,rk3528-saradc",
+	  .data = (ulong)&rk3528_saradc_data },
 	{ .compatible = "rockchip,rk3588-saradc",
 	  .data = (ulong)&rk3588_saradc_data },
 	{ }

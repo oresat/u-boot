@@ -15,9 +15,35 @@
 #include "../sysfw-loader.h"
 #include "../common.h"
 
+#define CTRLMMR_MCU_RST_CTRL             0x04518170
+#define RST_CTRL_ESM_ERROR_RST_EN_Z_MASK 0xFFFDFFFF
+
 struct fwl_data cbass_main_fwls[] = {
 	{ "FSS_DAT_REG3", 7, 8 },
 };
+
+const struct k3_speed_grade_map am62p_map[] = {
+	{'O', 1000000000},
+	{'S', 1250000000},
+	{'T', 1250000000},
+	{'U', 1250000000},
+	{'V', 1250000000},
+	{/* List Terminator */ },
+};
+
+char k3_get_speed_grade(void)
+{
+	u32 efuse_val = readl(CTRLMMR_WKUP_JTAG_DEVICE_ID);
+	u32 efuse_speed = (efuse_val & JTAG_DEV_SPEED_MASK) >>
+			  JTAG_DEV_SPEED_SHIFT;
+
+	return ('A' - 1) + efuse_speed;
+}
+
+const struct k3_speed_grade_map *k3_get_speed_grade_map(void)
+{
+	return am62p_map;
+}
 
 /*
  * This uninitialized global variable would normal end up in the .bss section,
@@ -65,6 +91,15 @@ static void ctrl_mmr_unlock(void)
 	/* Unlock PADCFG_CTRL_MMR padconf registers */
 	mmr_unlock(PADCFG_MMR0_BASE, 1);
 	mmr_unlock(PADCFG_MMR1_BASE, 1);
+}
+
+static __maybe_unused void enable_mcu_esm_reset(void)
+{
+	/* Set CTRLMMR_MCU_RST_CTRL:MCU_ESM_ERROR_RST_EN_Z  to '0' (low active) */
+	u32 stat = readl(CTRLMMR_MCU_RST_CTRL);
+
+	stat &= RST_CTRL_ESM_ERROR_RST_EN_Z_MASK;
+	writel(stat, CTRLMMR_MCU_RST_CTRL);
 }
 
 void board_init_f(ulong dummy)
@@ -152,14 +187,34 @@ void board_init_f(ulong dummy)
 	/* Output System Firmware version info */
 	k3_sysfw_print_ver();
 
+	/* Output DM Firmware version info */
+	if (IS_ENABLED(CONFIG_ARM64))
+		k3_dm_print_ver();
+
 	if (IS_ENABLED(CONFIG_K3_AM62A_DDRSS)) {
 		ret = uclass_get_device(UCLASS_RAM, 0, &dev);
 		if (ret)
 			panic("DRAM init failed: %d\n", ret);
 	}
 
+	if (IS_ENABLED(CONFIG_ESM_K3)) {
+		/* Probe/configure ESM0 */
+		ret = uclass_get_device_by_name(UCLASS_MISC, "esm@420000", &dev);
+		if (ret)
+			printf("esm main init failed: %d\n", ret);
+
+		/* Probe/configure MCUESM */
+		ret = uclass_get_device_by_name(UCLASS_MISC, "esm@4100000", &dev);
+		if (ret)
+			printf("esm mcu init failed: %d\n", ret);
+
+		enable_mcu_esm_reset();
+	}
+
 	spl_enable_cache();
-	debug("am62px_init: %s done\n", __func__);
+
+	setup_qos();
+	k3_fix_rproc_clock("/a53@0");
 }
 
 u32 spl_mmc_boot_mode(struct mmc *mmc, const u32 boot_device)
@@ -170,12 +225,22 @@ u32 spl_mmc_boot_mode(struct mmc *mmc, const u32 boot_device)
 	u32 bootmode_cfg = (devstat & MAIN_DEVSTAT_PRIMARY_BOOTMODE_CFG_MASK) >>
 			    MAIN_DEVSTAT_PRIMARY_BOOTMODE_CFG_SHIFT;
 
+	if (bootindex != K3_PRIMARY_BOOTMODE) {
+		pr_alert("Fallback to backup bootmode MMCSD_MODE_FS\n");
+		return MMCSD_MODE_FS;
+	}
+
 	switch (bootmode) {
 	case BOOT_DEVICE_EMMC:
+		if (IS_ENABLED(CONFIG_SUPPORT_EMMC_BOOT))
+			return MMCSD_MODE_EMMCBOOT;
+		if (IS_ENABLED(CONFIG_SPL_FS_FAT) || IS_ENABLED(CONFIG_SPL_FS_EXT4))
+			return MMCSD_MODE_FS;
 		return MMCSD_MODE_EMMCBOOT;
 	case BOOT_DEVICE_MMC:
 		if (bootmode_cfg & MAIN_DEVSTAT_PRIMARY_MMC_FS_RAW_MASK)
 			return MMCSD_MODE_RAW;
+		fallthrough;
 	default:
 		return MMCSD_MODE_FS;
 	}
@@ -270,6 +335,10 @@ u32 spl_boot_device(void)
 {
 	u32 devstat = readl(CTRLMMR_MAIN_DEVSTAT);
 	u32 bootmedia;
+
+#if IS_ENABLED(CONFIG_SPL_OS_BOOT_SECURE) && !IS_ENABLED(CONFIG_ARM64)
+	return k3_r5_falcon_bootmode();
+#endif
 
 	if (bootindex == K3_PRIMARY_BOOTMODE)
 		bootmedia = __get_primary_bootmedia(devstat);

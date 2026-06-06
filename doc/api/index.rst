@@ -12,10 +12,13 @@ U-Boot API documentation
    dm
    efi
    event
+   fs
    getopt
    interrupt
+   interconnect
+   i3c
+   led
    linker_lists
-   lmb
    logging
    nvmem
    part
@@ -23,6 +26,9 @@ U-Boot API documentation
    rng
    sandbox
    serial
+   setjmp
    sysreset
+   test
    timer
    unicode
+   uthread

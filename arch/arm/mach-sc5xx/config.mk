@@ -8,9 +8,11 @@
 # Contact: Greg Malysa <greg.malysa@timesys.com>
 #
 
-ifdef CONFIG_SPL_BUILD
+ifdef CONFIG_XPL_BUILD
 INPUTS-y += $(obj)/u-boot-spl.ldr
 endif
 
-LDR_FLAGS += --bcode=$(CONFIG_SC_BOOT_MODE)
+INPUTS-y += u-boot.ldr
+
+LDR_FLAGS += --bcode=$(CONFIG_SC_BCODE)
 LDR_FLAGS += --use-vmas

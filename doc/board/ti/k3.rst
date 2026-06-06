@@ -31,19 +31,27 @@ K3 Based SoCs
    :maxdepth: 1
 
    am62ax_sk
+   am62dx_evm
    am62x_sk
-   ../beagle/am62x_beagleplay
-   ../phytec/phycore-am62x
-   ../toradex/verdin-am62
    am62px_sk
+   am6254atl_sk
    am64x_evm
    am65x_evm
    j7200_evm
-   ../beagle/j721e_beagleboneai64
    j721e_evm
    j721s2_evm
    j722s_evm
    j784s4_evm
+
+K3 SoC based boards in other sections
+
+* :doc:`../beagle/am62x_beagleplay`
+* :doc:`../beagle/am67a_beagley_ai`
+* :doc:`../beagle/j721e_beagleboneai64`
+* :doc:`../phytec/phycore-am62x`
+* :doc:`../phytec/phycore-am62ax`
+* :doc:`../toradex/verdin-am62`
+* :doc:`../toradex/verdin-am62p`
 
 Boot Flow Overview
 ------------------
@@ -177,7 +185,7 @@ online
 
 * **TI Firmware (TIFS, DM, SYSFW)**
 
-  | **source:** https://git.ti.com/git/processor-firmware/ti-linux-firmware.git
+  | **source:** https://github.com/TexasInstruments/ti-linux-firmware
   | **branch:** ti-linux-firmware
 
 .. note::
@@ -456,7 +464,7 @@ The Kernel FIT Image that we have has Kernel Image, DTB and the DTBOs.  It
 supports packing multiple images and configurations that allow you to
 choose any configuration at runtime to boot from.
 
-.. code-block::
+.. code-block:: dts
 
     /dts-v1/;
 
@@ -480,7 +488,7 @@ choose any configuration at runtime to boot from.
 
 * Sample Images
 
-.. code-block::
+.. code-block:: dts
 
     kernel-1 {
             description = "Linux kernel";
@@ -529,7 +537,7 @@ corresponding configuration node as follows.
 
 * Sample Configurations
 
-.. code-block::
+.. code-block:: dts
 
     conf-ti_k3-j721e-common-proc-board.dtb {
             description = "Linux kernel, FDT blob";
@@ -581,7 +589,7 @@ Generating the fitImage
 
         For e.g
 
-        .. code-block::
+        .. code-block:: diff
 
             diff --git a/configs/j721e_evm_a72_defconfig b/configs/j721e_evm_a72_defconfig
             index a5c1df7e0054..6d0126d955ef 100644
@@ -601,7 +609,7 @@ Generating the fitImage
 
         For e.g
 
-        .. code-block::
+        .. code-block:: diff
 
             diff --git a/arch/arm/dts/k3-j721e-binman.dtsi b/arch/arm/dts/k3-j721e-binman.dtsi
                   index 673be646b1e3..752fa805fe8d 100644
@@ -646,9 +654,9 @@ Refer (:ref:`U-boot ARMV8 build <k3_rst_include_start_build_steps_uboot>`)
 Saving environment
 ------------------
 
-SAVEENV is disabled by default and for the new flow uses Uenv.txt as the default
-way for saving the environments. This has been done as Uenv.txt is more granular
-then the saveenv command and can be used across various bootmodes too.
+SAVEENV is disabled by default and for the new flow uses uEnv.txt as the default
+way for saving the environments. This has been done as uEnv.txt is more granular
+than the saveenv command and can be used across various bootmodes too.
 
 **Writing to MMC/EMMC**
 

@@ -51,11 +51,6 @@ int board_early_init_f(void)
 	return 0;
 }
 
-int board_init(void)
-{
-	return 0;
-}
-
 int board_eth_init(struct bd_info *bis)
 {
 	return pci_eth_init(bis);
@@ -156,7 +151,8 @@ int fsl_board_late_init(void)
 	 * If the watchdog isn't enabled at reset (which is a configuration
 	 * option) disabling it doesn't hurt either.
 	 */
-	if (!IS_ENABLED(CONFIG_WATCHDOG_AUTOSTART))
+	if (IS_ENABLED(CONFIG_WDT_SL28CPLD) &&
+	    !IS_ENABLED(CONFIG_WATCHDOG_AUTOSTART))
 		stop_recovery_watchdog();
 
 	return 0;

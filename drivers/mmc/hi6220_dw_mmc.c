@@ -36,7 +36,7 @@ struct hi6220_dwmmc_priv_data {
 struct hisi_mmc_data {
 	unsigned int clock;
 	bool use_fifo;
-	u32 fifoth_val;
+	u32 fifo_depth;
 };
 
 static int hi6220_dwmmc_of_to_plat(struct udevice *dev)
@@ -114,9 +114,9 @@ static int hi6220_dwmmc_probe(struct udevice *dev)
 		}
 
 		host->bus_hz = clk_get_rate(priv->clks[HI6220_DWMMC_CLK_CIU]);
-		if (host->bus_hz <= 0) {
-			dev_err(dev, "Failed to get ciu clock rate(ret = %d).\n", ret);
-			return log_msg_ret("clk", ret);
+		if (!host->bus_hz || IS_ERR_VALUE(host->bus_hz)) {
+			dev_err(dev, "Failed to get ciu clock rate(ret = %d).\n", host->bus_hz);
+			return log_msg_ret("clk", host->bus_hz);
 		}
 	}
 	dev_dbg(dev, "bus clock rate: %d.\n", host->bus_hz);
@@ -125,7 +125,7 @@ static int hi6220_dwmmc_probe(struct udevice *dev)
 	host->mmc = &plat->mmc;
 
 	host->fifo_mode = mmc_data->use_fifo;
-	host->fifoth_val = mmc_data->fifoth_val;
+	host->fifo_depth = mmc_data->fifo_depth;
 	host->mmc->priv = &priv->host;
 	upriv->mmc = host->mmc;
 	host->mmc->dev = dev;
@@ -158,8 +158,7 @@ static const struct hisi_mmc_data hi6220_mmc_data = {
 static const struct hisi_mmc_data hi3798mv2x_mmc_data = {
 	.clock = 50000000,
 	.use_fifo = false,
-	// FIFO depth is 256
-	.fifoth_val = MSIZE(4) | RX_WMARK(0x7f) | TX_WMARK(0x80),
+	.fifo_depth = 256,
 };
 
 static const struct udevice_id hi6220_dwmmc_ids[] = {

@@ -34,6 +34,7 @@
 
 #include <bootm.h>
 #include <image.h>
+#include <u-boot/zlib.h>
 
 #define MAX_CMDLINE_SIZE	SZ_4K
 
@@ -239,29 +240,10 @@ static int boot_get_kernel(const char *addr_fit, struct bootm_headers *images,
 	return 0;
 }
 
-#ifdef CONFIG_LMB
-static void boot_start_lmb(struct bootm_headers *images)
-{
-	phys_addr_t	mem_start;
-	phys_size_t	mem_size;
-
-	mem_start = env_get_bootm_low();
-	mem_size = env_get_bootm_size();
-
-	lmb_init_and_reserve_range(&images->lmb, mem_start,
-				   mem_size, NULL);
-}
-#else
-#define lmb_reserve(lmb, base, size)
-static inline void boot_start_lmb(struct bootm_headers *images) { }
-#endif
-
 static int bootm_start(void)
 {
 	memset((void *)&images, 0, sizeof(images));
 	images.verify = env_get_yesno("verify");
-
-	boot_start_lmb(&images);
 
 	bootstage_mark_name(BOOTSTAGE_ID_BOOTM_START, "bootm_start");
 	images.state = BOOTM_STATE_START;
@@ -564,7 +546,8 @@ static int bootm_find_other(ulong img_addr, const char *conf_ramdisk,
 	     images.os.type == IH_TYPE_KERNEL_NOLOAD ||
 	     images.os.type == IH_TYPE_MULTI) &&
 	    (images.os.os == IH_OS_LINUX || images.os.os == IH_OS_VXWORKS ||
-	     images.os.os == IH_OS_EFI || images.os.os == IH_OS_TEE)) {
+	     images.os.os == IH_OS_EFI || images.os.os == IH_OS_TEE ||
+	     images.os.os == IH_OS_ELF)) {
 		return bootm_find_images(img_addr, conf_ramdisk, conf_fdt, 0,
 					 0);
 	}
@@ -596,7 +579,8 @@ static int handle_decomp_error(int comp_type, size_t uncomp_size,
 	if (ret == -ENOSYS)
 		return BOOTM_ERR_UNIMPLEMENTED;
 
-	if (uncomp_size >= buf_size)
+	if ((comp_type == IH_COMP_GZIP && ret == Z_BUF_ERROR) ||
+	    uncomp_size >= buf_size)
 		printf("Image too large: increase CONFIG_SYS_BOOTM_LEN\n");
 	else
 		printf("%s: uncompress error %d\n", name, ret);
@@ -639,12 +623,16 @@ static int bootm_load_os(struct bootm_headers *images, int boot_progress)
 	 */
 	if (os.type == IH_TYPE_KERNEL_NOLOAD && os.comp != IH_COMP_NONE) {
 		ulong req_size = ALIGN(image_len * 4, SZ_1M);
+		phys_addr_t addr;
 
-		load = lmb_alloc(&images->lmb, req_size, SZ_2M);
-		if (!load)
+		err = lmb_alloc_mem(LMB_MEM_ALLOC_ANY, SZ_2M, &addr,
+				    req_size, LMB_NONE);
+		if (err)
 			return 1;
-		os.load = load;
-		images->ep = load;
+
+		load = (ulong)addr;
+		os.load = (ulong)addr;
+		images->ep = (ulong)addr;
 		debug("Allocated %lx bytes at %lx for kernel (size %lx) decompression\n",
 		      req_size, load, image_len);
 	}
@@ -703,7 +691,7 @@ static int bootm_load_os(struct bootm_headers *images, int boot_progress)
 
 		/* Handle BOOTM_STATE_LOADOS */
 		if (relocated_addr != load) {
-			printf("Moving Image from 0x%lx to 0x%lx, end=%lx\n",
+			printf("Moving Image from 0x%lx to 0x%lx, end=0x%lx\n",
 			       load, relocated_addr,
 			       relocated_addr + image_size);
 			memmove((void *)relocated_addr, load_buf, image_size);
@@ -714,8 +702,19 @@ static int bootm_load_os(struct bootm_headers *images, int boot_progress)
 		images->os.end = relocated_addr + image_size;
 	}
 
-	lmb_reserve(&images->lmb, images->os.load, (load_end -
-						    images->os.load));
+	if (CONFIG_IS_ENABLED(LMB)) {
+		phys_addr_t load;
+
+		load = (phys_addr_t)images->os.load;
+		err = lmb_alloc_mem(LMB_MEM_ALLOC_ADDR, 0, &load,
+				    (load_end - images->os.load), LMB_NONE);
+		if (err) {
+			log_err("Unable to allocate memory %#lx for loading OS\n",
+				images->os.load);
+			return 1;
+		}
+	}
+
 	return 0;
 }
 
@@ -1029,19 +1028,19 @@ int bootm_run_states(struct bootm_info *bmi, int states)
 	if (!ret && (states & BOOTM_STATE_RAMDISK)) {
 		ulong rd_len = images->rd_end - images->rd_start;
 
-		ret = boot_ramdisk_high(&images->lmb, images->rd_start,
-			rd_len, &images->initrd_start, &images->initrd_end);
+		ret = boot_ramdisk_high(images->rd_start, rd_len,
+					&images->initrd_start,
+					&images->initrd_end);
 		if (!ret) {
 			env_set_hex("initrd_start", images->initrd_start);
 			env_set_hex("initrd_end", images->initrd_end);
 		}
 	}
 #endif
-#if CONFIG_IS_ENABLED(OF_LIBFDT) && defined(CONFIG_LMB)
+#if CONFIG_IS_ENABLED(OF_LIBFDT) && CONFIG_IS_ENABLED(LMB)
 	if (!ret && (states & BOOTM_STATE_FDT)) {
-		boot_fdt_add_mem_rsv_regions(&images->lmb, images->ft_addr);
-		ret = boot_relocate_fdt(&images->lmb, &images->ft_addr,
-					&images->ft_len);
+		boot_fdt_add_mem_rsv_regions(images->ft_addr);
+		ret = boot_relocate_fdt(&images->ft_addr, &images->ft_len);
 	}
 #endif
 
@@ -1183,8 +1182,7 @@ void bootm_init(struct bootm_info *bmi)
 {
 	memset(bmi, '\0', sizeof(struct bootm_info));
 	bmi->boot_progress = true;
-	if (IS_ENABLED(CONFIG_CMD_BOOTM))
-		bmi->images = &images;
+	bmi->images = &images;
 }
 
 /**

@@ -141,7 +141,6 @@ static int do_load_serial(struct cmd_tbl *cmdtp, int flag, int argc,
 
 static ulong load_serial(long offset)
 {
-	struct lmb lmb;
 	char	record[SREC_MAXRECLEN + 1];	/* buffer for one S-Record	*/
 	char	binbuf[SREC_MAXBINLEN];		/* buffer for binary data	*/
 	int	binlen;				/* no. of data bytes in S-Rec.	*/
@@ -153,8 +152,6 @@ static ulong load_serial(long offset)
 	ulong	end_addr   =  0;
 	int	line_count =  0;
 	long ret;
-
-	lmb_init_and_reserve(&lmb, gd->bd, (void *)gd->fdt_blob);
 
 	while (read_record(record, SREC_MAXRECLEN + 1) >= 0) {
 		type = srec_decode(record, &binlen, &addr, binbuf);
@@ -181,17 +178,20 @@ static ulong load_serial(long offset)
 #endif
 		    {
 			void *dst;
+			phys_addr_t dst_addr;
 
-			ret = lmb_reserve(&lmb, store_addr, binlen);
+			dst_addr = (phys_addr_t)store_addr;
+			ret = lmb_alloc_mem(LMB_MEM_ALLOC_ADDR, 0, &dst_addr,
+					    binlen, LMB_NONE);
 			if (ret) {
 				printf("\nCannot overwrite reserved area (%08lx..%08lx)\n",
 					store_addr, store_addr + binlen);
 				return ret;
 			}
-			dst = map_sysmem(store_addr, binlen);
+			dst = map_sysmem(dst_addr, binlen);
 			memcpy(dst, binbuf, binlen);
 			unmap_sysmem(dst);
-			lmb_free(&lmb, store_addr, binlen);
+			lmb_free(dst_addr, binlen, LMB_NONE);
 		    }
 		    if ((store_addr) < start_addr)
 			start_addr = store_addr;

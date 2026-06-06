@@ -6,22 +6,26 @@
  */
 
 #include <config.h>
+#include <errno.h>
+#include <env.h>
+#include <fdtdec.h>
+#include <log.h>
+#include <init.h>
+#include <hang.h>
+#include <handoff.h>
+#include <image.h>
+#include <spl.h>
+#include <usb.h>
+#include <usb/dwc2_udc.h>
+#include <asm/global_data.h>
+#include <asm/io.h>
 #include <asm/arch/clock_manager.h>
 #include <asm/arch/mailbox_s10.h>
 #include <asm/arch/misc.h>
 #include <asm/arch/reset_manager.h>
 #include <asm/arch/secure_vab.h>
 #include <asm/arch/smc_api.h>
-#include <asm/global_data.h>
-#include <asm/io.h>
-#include <errno.h>
-#include <fdtdec.h>
-#include <hang.h>
-#include <image.h>
-#include <init.h>
-#include <log.h>
-#include <usb.h>
-#include <usb/dwc2_udc.h>
+#include <bloblist.h>
 
 DECLARE_GLOBAL_DATA_PTR;
 
@@ -57,7 +61,18 @@ int board_init(void)
 
 int dram_init_banksize(void)
 {
+#if CONFIG_IS_ENABLED(HANDOFF) && IS_ENABLED(CONFIG_TARGET_SOCFPGA_AGILEX5)
+#ifndef CONFIG_SPL_BUILD
+	struct spl_handoff *ho;
+
+	ho = bloblist_find(BLOBLISTT_U_BOOT_SPL_HANDOFF, sizeof(*ho));
+	if (!ho)
+		return log_msg_ret("Missing SPL hand-off info", -ENOENT);
+	handoff_load_dram_banks(ho);
+#endif
+#else
 	fdtdec_setup_memory_banksize();
+#endif /* HANDOFF && CONFIG_TARGET_SOCFPGA_AGILEX5 */
 
 	return 0;
 }
@@ -102,7 +117,7 @@ u8 socfpga_get_board_id(void)
 	u32 jtag_usercode;
 	int err;
 
-#if !IS_ENABLED(CONFIG_SPL_BUILD) && IS_ENABLED(CONFIG_SPL_ATF)
+#if !IS_ENABLED(CONFIG_XPL_BUILD) && IS_ENABLED(CONFIG_SPL_ATF)
 	err = smc_get_usercode(&jtag_usercode);
 #else
 	u32 resp_len = 1;
@@ -120,7 +135,7 @@ u8 socfpga_get_board_id(void)
 
 	if (jtag_usercode == DEFAULT_JTAG_USERCODE) {
 		debug("JTAG Usercode is not set. Default Board ID to 0\n");
-	} else if (jtag_usercode >= 0 && jtag_usercode <= 255) {
+	} else if (jtag_usercode <= 255) {
 		board_id = jtag_usercode;
 		debug("Valid JTAG Usercode. Set Board ID to %u\n", board_id);
 	} else {
@@ -130,7 +145,7 @@ u8 socfpga_get_board_id(void)
 	return board_id;
 }
 
-#if IS_ENABLED(CONFIG_SPL_BUILD) && IS_ENABLED(CONFIG_TARGET_SOCFPGA_SOC64)
+#if IS_ENABLED(CONFIG_XPL_BUILD) && IS_ENABLED(CONFIG_TARGET_SOCFPGA_SOC64)
 int board_fit_config_name_match(const char *name)
 {
 	char board_name[10];
@@ -154,7 +169,7 @@ void board_fit_image_post_process(const void *fit, int node, void **p_image,
 }
 #endif
 
-#if !IS_ENABLED(CONFIG_SPL_BUILD) && IS_ENABLED(CONFIG_FIT)
+#if !IS_ENABLED(CONFIG_XPL_BUILD) && IS_ENABLED(CONFIG_FIT)
 void board_prep_linux(struct bootm_headers *images)
 {
 	bool use_fit = false;
@@ -180,5 +195,28 @@ void board_prep_linux(struct bootm_headers *images)
 		if (env_get("linux_qspi_enable"))
 			run_command(env_get("linux_qspi_enable"), 0);
 	}
+}
+#endif
+
+#if CONFIG_IS_ENABLED(LMB_ARCH_MEM_MAP)
+void lmb_arch_add_memory(void)
+{
+	int i;
+	struct bd_info *bd = gd->bd;
+
+	for (i = 0; i < CONFIG_NR_DRAM_BANKS; i++) {
+		if (bd->bi_dram[i].size)
+			lmb_add(bd->bi_dram[i].start, bd->bi_dram[i].size);
+	}
+}
+#endif
+
+#if (defined(CONFIG_TARGET_SOCFPGA_ARRIA10) || \
+     defined(CONFIG_TARGET_SOCFPGA_GEN5)) && defined(CONFIG_XPL_BUILD)
+unsigned long board_spl_mmc_get_uboot_raw_sector(struct mmc *mmc,
+						 unsigned long raw_sect)
+{
+	/* offset of u-boot proper inside u-boot-with-spl.sfp image */
+	return (CONFIG_SPL_PAD_TO * 4) / 512 + raw_sect;
 }
 #endif

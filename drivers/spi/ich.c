@@ -256,7 +256,7 @@ static int ich_spi_exec_op_swseq(struct spi_slave *slave,
 	struct ich_spi_priv *ctlr = dev_get_priv(bus);
 	uint16_t control;
 	int16_t opcode_index;
-	int with_address;
+	int with_address = 0;
 	int status;
 	struct spi_trans *trans = &ctlr->trans;
 	bool lock = spi_lock_status(plat, ctlr->base);
@@ -779,7 +779,7 @@ static int ich_init_controller(struct udevice *dev,
 			       struct ich_spi_plat *plat,
 			       struct ich_spi_priv *ctlr)
 {
-	if (spl_phase() == PHASE_TPL) {
+	if (xpl_phase() == PHASE_TPL) {
 		struct ich_spi_plat *plat = dev_get_plat(dev);
 		int ret;
 
@@ -867,7 +867,7 @@ static int ich_spi_probe(struct udevice *dev)
 	if (ret)
 		return ret;
 
-	if (spl_phase() == PHASE_TPL) {
+	if (xpl_phase() == PHASE_TPL) {
 		/* Cache the BIOS to speed things up */
 		ret = ich_cache_bios_region(dev);
 		if (ret)

@@ -3,6 +3,7 @@
  * Copyright 2021 Gateworks Corporation
  */
 
+#include <env.h>
 #include <fdt_support.h>
 #include <init.h>
 #include <led.h>
@@ -14,6 +15,7 @@
 #include <asm/mach-imx/boot_mode.h>
 
 #include "eeprom.h"
+#include "../fsa.h"
 
 int board_phys_sdram_size(phys_size_t *size)
 {
@@ -74,6 +76,9 @@ int board_phy_config(struct phy_device *phydev)
 int board_init(void)
 {
 	venice_eeprom_init(1);
+
+	/* detect and configure FSA adapters */
+	fsa_init();
 
 	return 0;
 }
@@ -157,20 +162,20 @@ int board_late_init(void)
 			int bootpart;
 
 			switch (EXT_CSD_EXTRACT_BOOT_PART(mmc->part_config)) {
-			case 1: /* boot0 */
-				bootpart = 1;
+			case EMMC_BOOT_PART_BOOT1:
+				bootpart = EMMC_HWPART_BOOT1;
 				break;
-			case 2: /* boot1 */
-				bootpart = 2;
+			case EMMC_BOOT_PART_BOOT2:
+				bootpart = EMMC_HWPART_BOOT2;
 				break;
-			case 7: /* user */
+			case EMMC_BOOT_PART_USER:
 			default:
-				bootpart = 0;
+				bootpart = EMMC_HWPART_DEFAULT;
 				break;
 			}
 			/* IMX8MP/IMX8MN BOOTROM v2 uses offset=0 for boot parts */
 			if ((IS_ENABLED(CONFIG_IMX8MN) || IS_ENABLED(CONFIG_IMX8MP)) &&
-			    (bootpart == 1 || bootpart == 2))
+			    (bootpart == EMMC_BOOT_PART_BOOT1 || bootpart == EMMC_BOOT_PART_BOOT2))
 				bootblk = 0;
 			env_set_hex("bootpart", bootpart);
 			env_set_hex("bootblk", bootblk);
@@ -201,10 +206,10 @@ uint mmc_get_env_part(struct mmc *mmc)
 {
 	if (!IS_SD(mmc)) {
 		switch (EXT_CSD_EXTRACT_BOOT_PART(mmc->part_config)) {
-		case 1:
-			return 1;
-		case 2:
-			return 2;
+		case EMMC_BOOT_PART_BOOT1:
+			return EMMC_HWPART_BOOT1;
+		case EMMC_BOOT_PART_BOOT2:
+			return EMMC_HWPART_BOOT2;
 		}
 	}
 
@@ -220,6 +225,9 @@ int ft_board_setup(void *fdt, struct bd_info *bd)
 
 	/* set board model dt prop */
 	fdt_setprop_string(fdt, 0, "board", eeprom_get_model());
+
+	/* fixups for FSA adapters */
+	fsa_ft_fixup(fdt);
 
 	if (!strncmp(base_model, "GW73", 4)) {
 		pcbrev = get_pcb_rev(base_model);

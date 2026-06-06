@@ -904,11 +904,11 @@ void *realloc_simple(void *ptr, size_t size);
 # define mALLOPt		dlmallopt
 
 /* Ensure that U-Boot actually uses these too */
-#define calloc dlcalloc
+#define calloc(x,y) dlcalloc(x,y)
 #define free(ptr) dlfree(ptr)
 #define malloc(x) dlmalloc(x)
-#define memalign dlmemalign
-#define realloc dlrealloc
+#define memalign(a,x) dlmemalign(a,x)
+#define realloc(p,x) dlrealloc(p,x)
 #define valloc dlvalloc
 #define pvalloc dlpvalloc
 #define mallinfo() dlmallinfo()
@@ -981,6 +981,14 @@ extern ulong mem_malloc_start;
 extern ulong mem_malloc_end;
 extern ulong mem_malloc_brk;
 
+/**
+ * mem_malloc_init() - Set up the malloc() pool
+ *
+ * Sets the region of memory to be used for all future calls to malloc(), etc.
+ *
+ * @start: Start address
+ * @size: Size in bytes
+ */
 void mem_malloc_init(ulong start, ulong size);
 
 #ifdef __cplusplus

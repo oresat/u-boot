@@ -208,7 +208,7 @@ int mtd_parse_partitions(struct mtd_info *parent, const char **_mtdparts,
 {
 	struct mtd_partition partition = {}, *parts;
 	const char *mtdparts = *_mtdparts;
-	uint64_t cur_off = 0, cur_sz = 0;
+	uint64_t cur_off = 0;
 	int nparts = 0;
 	int ret, idx;
 	u64 sz;
@@ -236,9 +236,12 @@ int mtd_parse_partitions(struct mtd_info *parent, const char **_mtdparts,
 		if (ret)
 			return ret;
 
+		if (parts[idx].offset == MTD_OFFSET_NOT_SPECIFIED)
+			parts[idx].offset = cur_off;
+		cur_off += parts[idx].size;
+
 		if (parts[idx].size == MTD_SIZE_REMAINING)
-			parts[idx].size = parent->size - cur_sz;
-		cur_sz += parts[idx].size;
+			parts[idx].size = parent->size - parts[idx].offset;
 
 		sz = parts[idx].size;
 		if (sz < parent->writesize || do_div(sz, parent->writesize)) {
@@ -246,10 +249,6 @@ int mtd_parse_partitions(struct mtd_info *parent, const char **_mtdparts,
 			       parent->writesize);
 			return -EINVAL;
 		}
-
-		if (parts[idx].offset == MTD_OFFSET_NOT_SPECIFIED)
-			parts[idx].offset = cur_off;
-		cur_off += parts[idx].size;
 
 		parts[idx].ecclayout = parent->ecclayout;
 	}
@@ -910,11 +909,13 @@ int add_mtd_partitions_of(struct mtd_info *master)
 			continue;
 
 		offset = ofnode_get_addr_size_index_notrans(child, 0, &size);
-		if (offset == FDT_ADDR_T_NONE || !size) {
-			debug("Missing partition offset/size on \"%s\" partition\n",
+		if (offset == FDT_ADDR_T_NONE) {
+			debug("Missing partition offset on \"%s\" partition\n",
 			      master->name);
 			continue;
 		}
+		if (size == MTDPART_SIZ_FULL)
+			size = master->size - offset;
 
 		part.name = ofnode_read_string(child, "label");
 		if (!part.name)
@@ -1060,13 +1061,13 @@ EXPORT_SYMBOL_GPL(mtd_get_device_size);
 static struct mtd_info *mtd_get_partition_by_index(struct mtd_info *mtd, int index)
 {
 	struct mtd_info *part;
-	int i = 0;
+	int i = 1;
 
+	/* partition indexes starts from 1 */
 	list_for_each_entry(part, &mtd->partitions, node)
 		if (i++ == index)
 			return part;
 
-	debug("Partition with idx=%d not found on MTD device %s\n", index, mtd->name);
 	return NULL;
 }
 
@@ -1083,7 +1084,8 @@ static int __maybe_unused part_get_info_mtd(struct blk_desc *dev_desc, int part_
 
 	part = mtd_get_partition_by_index(master, part_idx);
 	if (!part) {
-		debug("Failed to find partition with idx=%d\n", part_idx);
+		debug("Failed to find partition with idx=%d on MTD device %s\n",
+		      part_idx, master->name);
 		return -EINVAL;
 	}
 

@@ -16,7 +16,7 @@
 #include <spi_flash.h>
 #include <search.h>
 #include <errno.h>
-#include <uuid.h>
+#include <u-boot/uuid.h>
 #include <asm/cache.h>
 #include <asm/global_data.h>
 #include <dm/device-internal.h>
@@ -148,7 +148,7 @@ static int env_sf_save(void)
 
 	puts("done\n");
 
-	gd->env_valid = gd->env_valid == ENV_REDUND ? ENV_VALID : ENV_REDUND;
+	gd->env_valid = gd->env_valid == ENV_VALID ? ENV_REDUND : ENV_VALID;
 
 	printf("Valid environment: %d\n", (int)gd->env_valid);
 
@@ -329,7 +329,7 @@ done:
 
 __weak void *env_sf_get_env_addr(void)
 {
-#ifndef CONFIG_SPL_BUILD
+#ifndef CONFIG_XPL_BUILD
 	return (void *)CONFIG_ENV_ADDR;
 #else
 	return NULL;
@@ -380,7 +380,7 @@ static int env_sf_init_early(void)
 
 	tmp_env1 = (env_t *)memalign(ARCH_DMA_MINALIGN,
 			CONFIG_ENV_SIZE);
-	if (IS_ENABLED(CONFIG_SYS_REDUNDAND_ENVIRONMENT))
+	if (IS_ENABLED(CONFIG_ENV_REDUNDANT))
 		tmp_env2 = (env_t *)memalign(ARCH_DMA_MINALIGN,
 					     CONFIG_ENV_SIZE);
 
@@ -394,7 +394,7 @@ static int env_sf_init_early(void)
 	read1_fail = spi_flash_read(env_flash, CONFIG_ENV_OFFSET,
 				    CONFIG_ENV_SIZE, tmp_env1);
 
-	if (IS_ENABLED(CONFIG_SYS_REDUNDAND_ENVIRONMENT)) {
+	if (IS_ENABLED(CONFIG_ENV_REDUNDANT)) {
 		read2_fail = spi_flash_read(env_flash,
 					    CONFIG_ENV_OFFSET_REDUND,
 					    CONFIG_ENV_SIZE, tmp_env2);
@@ -429,7 +429,7 @@ err_read:
 	spi_flash_free(env_flash);
 
 	free(tmp_env1);
-	if (IS_ENABLED(CONFIG_SYS_REDUNDAND_ENVIRONMENT))
+	if (IS_ENABLED(CONFIG_ENV_REDUNDANT))
 		free(tmp_env2);
 out:
 	/* env is not valid. always return 0 */
